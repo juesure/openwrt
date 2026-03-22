@@ -18,6 +18,8 @@ env:
   CONFIG_FILE: ax6-256m.config
   # 时区
   TZ: Asia/Shanghai
+  # 定义工作目录（提前赋值，避免变量解析错误）
+  WORK_DIR: /home/runner/work/openwrt/openwrt/workdir
 
 jobs:
   build-ax6-firmware:
@@ -43,37 +45,38 @@ jobs:
           gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget \
           libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod
           sudo timedatectl set-timezone "$TZ"
-          # 核心修复：创建用户可写的工作目录（无需 sudo，避免权限报错）
-          mkdir -p $GITHUB_WORKSPACE/workdir
+          # 核心修复：创建固定路径的工作目录（避免变量解析错误）
+          mkdir -p $WORK_DIR
           # 验证目录权限（调试用）
-          ls -ld $GITHUB_WORKSPACE/workdir
+          ls -ld $WORK_DIR
 
-      # 步骤3：克隆 OpenWrt 源码（使用可写目录）
+      # 步骤3：克隆 OpenWrt 源码（使用固定可写目录）
       - name: Clone OpenWrt Source
-        working-directory: $GITHUB_WORKSPACE/workdir
         run: |
+          # 切换到工作目录执行（避免 working-directory 变量解析问题）
+          cd $WORK_DIR
           # 查看磁盘空间使用情况（调试用）
           df -hT $PWD
           # 克隆源码（指定仓库地址和分支）
           git clone --depth=1 $REPO_URL -b $REPO_BRANCH openwrt
-          # 创建软链接，方便后续脚本访问源码目录（修复路径）
-          ln -sf $GITHUB_WORKSPACE/workdir/openwrt $GITHUB_WORKSPACE/openwrt
+          # 创建软链接，方便后续脚本访问源码目录
+          ln -sf $WORK_DIR/openwrt /home/runner/work/openwrt/openwrt/openwrt
           # 确保源码目录可写
-          chmod -R 755 $GITHUB_WORKSPACE/workdir/openwrt
+          chmod -R 755 $WORK_DIR/openwrt
 
       # 步骤4：注入 256M 扩容修改（核心）
       - name: Inject 256M Patch
         run: |
           # 赋予自定义脚本执行权限
           chmod +x $DIY_SCRIPT
-          cd $GITHUB_WORKSPACE/openwrt
+          cd /home/runner/work/openwrt/openwrt/openwrt
           # 执行扩容修改脚本（替换 DTS/generic.mk）
-          $GITHUB_WORKSPACE/$DIY_SCRIPT
+          /home/runner/work/openwrt/openwrt/$DIY_SCRIPT
 
       # 步骤5：更新/安装 Feeds
       - name: Update & Install Feeds
         run: |
-          cd $GITHUB_WORKSPACE/openwrt
+          cd /home/runner/work/openwrt/openwrt/openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
@@ -81,15 +84,15 @@ jobs:
       - name: Load AX6 Config
         run: |
           # 复制预生成的 AX6 配置文件
-          [ -e $CONFIG_FILE ] && cp $CONFIG_FILE $GITHUB_WORKSPACE/openwrt/.config
-          cd $GITHUB_WORKSPACE/openwrt
+          [ -e /home/runner/work/openwrt/openwrt/$CONFIG_FILE ] && cp /home/runner/work/openwrt/openwrt/$CONFIG_FILE /home/runner/work/openwrt/openwrt/openwrt/.config
+          cd /home/runner/work/openwrt/openwrt/openwrt
           # 生成最终配置
           make defconfig
 
       # 步骤7：下载依赖包（加速编译）
       - name: Download Packages
         run: |
-          cd $GITHUB_WORKSPACE/openwrt
+          cd /home/runner/work/openwrt/openwrt/openwrt
           make download -j$(nproc)
           # 清理空文件避免编译报错
           find dl -size -1024c -exec rm -f {} \;
@@ -98,7 +101,7 @@ jobs:
       - name: Compile Firmware
         id: compile
         run: |
-          cd $GITHUB_WORKSPACE/openwrt
+          cd /home/runner/work/openwrt/openwrt/openwrt
           # 多线程编译，失败则单线程排错
           make -j$(nproc) || make -j1 V=s
           # 记录编译状态和固件信息
@@ -112,7 +115,7 @@ jobs:
       - name: Generate Programmer Firmware
         if: steps.compile.outputs.status == 'success'
         run: |
-          cd $GITHUB_WORKSPACE/openwrt/bin/targets/ipq807x/generic
+          cd /home/runner/work/openwrt/openwrt/openwrt/bin/targets/ipq807x/generic
           # 1. 找到核心固件文件
           FACTORY_BIN=$(ls *-factory.bin | grep -E "redmi|ax6")
           SYSUPGRADE_BIN=$(ls *-sysupgrade.bin | grep -E "redmi|ax6")
