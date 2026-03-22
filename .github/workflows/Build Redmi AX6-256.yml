@@ -13,9 +13,9 @@ env:
   REPO_URL: https://github.com/juesure/openwrt/
   REPO_BRANCH: juesure-patch-1
   # 自定义脚本路径（匹配你实际存放的位置：openwrt/scripts/diy-ax6-256m.sh）
-  DIY_SCRIPT: /home/runner/work/openwrt/scripts/diy-ax6-256m.sh
+  DIY_SCRIPT: /home/runner/work/openwrt/openwrt/scripts/diy-ax6-256m.sh
   # 编译配置文件（提前生成的 Redmi AX6 配置）
-  CONFIG_FILE: /home/runner/work/openwrt/config/ax6-256m.config
+  CONFIG_FILE: /home/runner/work/openwrt/openwrt/config/ax6-256m.config
   # 时区
   TZ: Asia/Shanghai
   # 定义工作目录（固定路径）
