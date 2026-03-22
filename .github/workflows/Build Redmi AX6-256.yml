@@ -88,6 +88,23 @@ jobs:
           cd /home/runner/work/openwrt/openwrt/openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+# 步骤5：更新/安装 Feeds（独立步骤，语法正确）
+      - name: Update & Install Feeds
+        run: |
+          cd /home/runner/work/openwrt/openwrt/openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a  # 这行是独立的命令，单独放在 run 块中
+      
+      # 新增：Clean mt76 Driver（Critical Fix）→ 独立步骤，层级正确
+      - name: Clean mt76 Driver (Critical Fix)
+        run: |
+          cd /home/runner/work/openwrt/openwrt/openwrt
+          # 彻底删除 mt76 源码和编译缓存
+          rm -rf package/kernel/mt76
+          rm -rf build_dir/target-*/linux-mediatek*
+          rm -rf staging_dir/target-*/linux-mediatek*
+          # 重新生成配置，确保 mt76 被禁用
+          make defconfig
 
       # 步骤6：加载 AX6 编译配置
       - name: Load AX6 Config
