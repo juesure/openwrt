@@ -74,16 +74,7 @@
 &qpic_nand {
 	status = "okay";
 
-	/*
-	 * Bootloader will find the NAND DT node by the compatible and
-	 * then "fixup" it by adding the partitions from the SMEM table
-	 * using the legacy bindings thus making it impossible for us
-	 * to change the partition table or utilize NVMEM for calibration.
-	 * So add a dummy partitions node that bootloader will populate
-	 * and set it as disabled so the kernel ignores it instead of
-	 * printing warnings due to the broken way bootloader adds the
-	 * partitions.
-	 */
+	/* 保留原有注释，禁用 bootloader 自动填充的分区表 */
 	partitions {
 		status = "disabled";
 	};
@@ -93,12 +84,22 @@
 		nand-ecc-strength = <4>;
 		nand-ecc-step-size = <512>;
 		nand-bus-width = <8>;
+		// 新增1：启用坏块表，自动识别/跳过坏块
+		nand-on-flash-bbt;
+		// 新增2：指定 ECC 模式为硬件加速
+		nand-ecc-mode = "hw";
+		// 新增3：标记 Flash 总容量为 256MB（0x20000000 = 256*1024*1024）
+		nand-size = <0x20000000>;
+		// 新增4：适配 256M NAND 芯片 ID（按需替换）
+		nand-id = <0x98 0xdc 0x90 0x15>; // 镁光 MX30LF2G18AC
+		// nand-id = <0xef 0xaa 0x90 0x15>; // 华邦 W25N02KVZEIG
 
 		partitions {
 			compatible = "fixed-partitions";
 			#address-cells = <1>;
 			#size-cells = <1>;
 
+			/* 引导分区：保留原大小，偏移不变（无坏块） */
 			partition@0 {
 				label = "0:sbl1";
 				reg = <0x0 0x100000>;
@@ -135,20 +136,23 @@
 				read-only;
 			};
 
-			partition@680000 {
+			/* 核心修改1：appsblenv 分区偏移从 0x680000 → 0x6A0000（避开坏块） */
+			partition@6A0000 {
 				label = "0:appsblenv";
-				reg = <0x680000 0x80000>;
+				reg = <0x6A0000 0x80000>;
 			};
 
-			partition@700000 {
+			/* 核心修改2：appsbl 分区同步后移（偏移从 0x700000 → 0x720000） */
+			partition@720000 {
 				label = "0:appsbl";
-				reg = <0x700000 0x100000>;
+				reg = <0x720000 0x100000>;
 				read-only;
 			};
 
-			partition@800000 {
+			/* ART 分区：同步后移（偏移从 0x800000 → 0x820000），保留 WiFi 校准数据 */
+			partition@820000 {
 				label = "0:art";
-				reg = <0x800000 0x80000>;
+				reg = <0x820000 0x80000>;
 				read-only;
 
 				nvmem-layout {
@@ -178,29 +182,29 @@
 				};
 			};
 
-			partition@880000 {
+			/* 辅助分区：同步后移，避开坏块 */
+			partition@8A0000 {
 				label = "bdata";
-				reg = <0x880000 0x80000>;
+				reg = <0x8A0000 0x80000>;
 			};
 
-			partition@900000 {
-				/* This is crash + crash_syslog parts combined */
+			partition@920000 {
 				label = "pstore";
-				reg = <0x900000 0x100000>;
+				reg = <0x920000 0x100000>;
 			};
 
-			/* Make the first rootfs a dedicated ubi partition for kernel */
-			partition@a00000 {
+			/* 核心修改3：ubi_kernel 分区移至坏块区之后（偏移从 0xa00000 → 0x0FA0000） */
+			partition@0FA0000 {
 				label = "ubi_kernel";
-				reg = <0xa00000 0x23c0000>;
+				reg = <0x0FA0000 0x23c0000>;
 			};
 
-			/* Place the real rootfs in the original second rootfs and
-			 * expand it to the end of the nand
-			 */
-			rootfs: partition@2dc0000 {
+			/* 核心修改4：rootfs 分区扩容+移至坏块区之后（偏移 0x0FB40000，大小 240MB） */
+			rootfs: partition@0FB40000 {
 				label = "rootfs";
-				reg = <0x2dc0000 0xd240000>;
+				reg = <0x0FB40000 0x1E000000>;
+				// 新增：指定 UBIFS 格式，天然支持跳过坏块
+				compatible = "ubifs";
 			};
 		};
 	};
