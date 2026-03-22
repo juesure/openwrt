@@ -426,12 +426,34 @@ define Device/qnap_301w
 endef
 TARGET_DEVICES += qnap_301w
 
+# 保留原有继承关系，补充扩容适配参数
 define Device/redmi_ax6
-	$(call Device/xiaomi_ax3600)
-	DEVICE_VENDOR := Redmi
-	DEVICE_MODEL := AX6
-	DEVICE_PACKAGES := ipq-wifi-redmi_ax6
+    $(call Device/xiaomi_ax3600)
+    DEVICE_VENDOR := Redmi
+    DEVICE_MODEL := AX6
+    DEVICE_PACKAGES := ipq-wifi-redmi_ax6
+
+    # 核心修改1：适配 256M NAND Flash（UBIFS 格式）
+    # 页大小：2048（AX6 NAND 芯片标准）
+    PAGESIZE := 2048
+    # 擦除块大小：128KiB（匹配 DTS 中 NAND 配置）
+    BLOCKSIZE := 128KiB
+    # UBI 卷参数：-m 页大小 -p 擦除块大小 -s 子页大小
+    UBI_OPTS := -m $(PAGESIZE) -p $(BLOCKSIZE)KiB -s 2048
+
+    # 核心修改2：rootfs 大小（匹配 DTS 中 240MB = 0xE800000）
+    # 0xE800000 = 240 * 1024 * 1024 字节
+    ROOTFS_SIZE := 0xE800000
+
+    # 核心修改3：总固件大小（256M Flash = 0x20000000）
+    IMAGE_SIZE := 0x20000000
+
+    # 可选：强制使用 UBIFS 格式（避坏块核心）
+    IMAGE/factory.bin := append-ubi | check-size $$$$(IMAGE_SIZE)
+    IMAGE/sysupgrade.bin := append-ubi | sysupgrade-tar rootfs=$$$$@ | check-size $$$$(IMAGE_SIZE)
 endef
+
+# 保留设备注册（必须）
 TARGET_DEVICES += redmi_ax6
 
 define Device/spectrum_sax1v1k
