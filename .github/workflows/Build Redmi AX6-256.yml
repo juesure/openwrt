@@ -12,13 +12,13 @@ env:
   # 源码配置（Lean大 LEDE 源码，适配 IPQ807x）
   REPO_URL: https://github.com/juesure/openwrt/
   REPO_BRANCH: juesure-patch-1
-  # 自定义脚本（用于注入 256M 扩容修改）
-  DIY_SCRIPT: diy-ax6-256m.sh
+  # 自定义脚本路径（匹配你实际存放的位置：openwrt/scripts/diy-ax6-256m.sh）
+  DIY_SCRIPT: /home/runner/work/openwrt/scripts/diy-ax6-256m.sh
   # 编译配置文件（提前生成的 Redmi AX6 配置）
-  CONFIG_FILE: ax6-256m.config
+  CONFIG_FILE: /home/runner/work/openwrt/config/ax6-256m.config
   # 时区
   TZ: Asia/Shanghai
-  # 定义工作目录（提前赋值，避免变量解析错误）
+  # 定义工作目录（固定路径）
   WORK_DIR: /home/runner/work/openwrt/openwrt/workdir
 
 jobs:
@@ -28,9 +28,11 @@ jobs:
       contents: write # 赋予 Release 发布权限
 
     steps:
-      # 步骤1：拉取仓库文件（包含自定义脚本/配置）
+      # 步骤1：拉取仓库文件（包含 scripts 目录下的 diy 脚本）
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          path: /home/runner/work/openwrt/openwrt # 强制拉取到固定路径，确保脚本位置正确
 
       # 步骤2：初始化编译环境（安装依赖+清理空间，修复权限）
       - name: Initialize Build Env
@@ -49,11 +51,20 @@ jobs:
           mkdir -p $WORK_DIR
           # 验证目录权限（调试用）
           ls -ld $WORK_DIR
+          # 验证自定义脚本是否存在（关键：提前检查脚本路径）
+          if [ -f $DIY_SCRIPT ]; then
+              echo "✅ 自定义脚本找到：$DIY_SCRIPT"
+              chmod +x $DIY_SCRIPT # 赋予执行权限
+          else
+              echo "❌ 自定义脚本不存在：$DIY_SCRIPT"
+              ls -l /home/runner/work/openwrt/openwrt/scripts/ # 列出目录文件，便于排查
+              exit 1
+          fi
 
       # 步骤3：克隆 OpenWrt 源码（使用固定可写目录）
       - name: Clone OpenWrt Source
         run: |
-          # 切换到工作目录执行（避免 working-directory 变量解析问题）
+          # 切换到工作目录执行
           cd $WORK_DIR
           # 查看磁盘空间使用情况（调试用）
           df -hT $PWD
@@ -64,14 +75,12 @@ jobs:
           # 确保源码目录可写
           chmod -R 755 $WORK_DIR/openwrt
 
-      # 步骤4：注入 256M 扩容修改（核心）
+      # 步骤4：注入 256M 扩容修改（核心：使用正确的脚本路径）
       - name: Inject 256M Patch
         run: |
-          # 赋予自定义脚本执行权限
-          chmod +x $DIY_SCRIPT
           cd /home/runner/work/openwrt/openwrt/openwrt
-          # 执行扩容修改脚本（替换 DTS/generic.mk）
-          /home/runner/work/openwrt/openwrt/$DIY_SCRIPT
+          # 执行扩容修改脚本（使用实际路径）
+          $DIY_SCRIPT
 
       # 步骤5：更新/安装 Feeds
       - name: Update & Install Feeds
@@ -83,8 +92,14 @@ jobs:
       # 步骤6：加载 AX6 编译配置
       - name: Load AX6 Config
         run: |
-          # 复制预生成的 AX6 配置文件
-          [ -e /home/runner/work/openwrt/openwrt/$CONFIG_FILE ] && cp /home/runner/work/openwrt/openwrt/$CONFIG_FILE /home/runner/work/openwrt/openwrt/openwrt/.config
+          # 复制预生成的 AX6 配置文件（使用实际路径）
+          if [ -e $CONFIG_FILE ]; then
+              cp $CONFIG_FILE /home/runner/work/openwrt/openwrt/openwrt/.config
+              echo "✅ 编译配置文件加载成功：$CONFIG_FILE"
+          else
+              echo "❌ 编译配置文件不存在：$CONFIG_FILE"
+              exit 1
+          fi
           cd /home/runner/work/openwrt/openwrt/openwrt
           # 生成最终配置
           make defconfig
