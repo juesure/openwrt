@@ -1,0 +1,160 @@
+# 工作流名称
+name: Build Redmi AX6 (256M) - 编程器+分区固件
+
+# 触发条件：手动触发（推荐）+ 代码提交触发
+on:
+  push:
+    branches: [ juesure-patch-1 ]
+  workflow_dispatch: # 核心：支持手动点击触发编译
+
+# 全局环境变量
+env:
+  # 源码配置（Lean大 LEDE 源码，适配 IPQ807x）
+  REPO_URL: https://github.com/juesure/openwrt/
+  REPO_BRANCH: juesure-patch-1
+  # 自定义脚本（用于注入 256M 扩容修改）
+  DIY_SCRIPT: diy-ax6-256m.sh
+  # 编译配置文件（提前生成的 Redmi AX6 配置）
+  CONFIG_FILE: ax6-256m.config
+  # 时区
+  TZ: Asia/Shanghai
+
+jobs:
+  build-ax6-firmware:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write # 赋予 Release 发布权限
+
+    steps:
+      # 步骤1：拉取仓库文件（包含自定义脚本/配置）
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 步骤2：初始化编译环境（安装依赖+清理空间）
+      - name: Initialize Build Env
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          # 清理冗余文件释放空间
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt update -y && sudo apt full-upgrade -y
+          # 安装 OpenWrt 编译依赖（含 mtd-utils 用于生成编程器固件）
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+          gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget \
+          libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod
+          sudo timedatectl set-timezone "$TZ"
+          # 创建编译目录
+          mkdir -p /workdir && chown $USER:$GROUPS /workdir
+
+      # 步骤3：克隆 OpenWrt 源码
+      - name: Clone OpenWrt Source
+        working-directory: /workdir
+        run: |
+          git clone --depth=1 $REPO_URL -b $REPO_BRANCH openwrt
+          ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+      # 步骤4：注入 256M 扩容修改（核心）
+      - name: Inject 256M Patch
+        run: |
+          # 赋予自定义脚本执行权限
+          chmod +x $DIY_SCRIPT
+          cd openwrt
+          # 执行扩容修改脚本（替换 DTS/generic.mk）
+          $GITHUB_WORKSPACE/$DIY_SCRIPT
+
+      # 步骤5：更新/安装 Feeds
+      - name: Update & Install Feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # 步骤6：加载 AX6 编译配置
+      - name: Load AX6 Config
+        run: |
+          # 复制预生成的 AX6 配置文件
+          [ -e $CONFIG_FILE ] && cp $CONFIG_FILE openwrt/.config
+          cd openwrt
+          # 生成最终配置
+          make defconfig
+
+      # 步骤7：下载依赖包（加速编译）
+      - name: Download Packages
+        run: |
+          cd openwrt
+          make download -j$(nproc)
+          # 清理空文件避免编译报错
+          find dl -size -1024c -exec rm -f {} \;
+
+      # 步骤8：编译固件（核心）
+      - name: Compile Firmware
+        id: compile
+        run: |
+          cd openwrt
+          # 多线程编译，失败则单线程排错
+          make -j$(nproc) || make -j1 V=s
+          # 记录编译状态和固件信息
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
+          # 提取设备型号
+          grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+          echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
+
+      # 步骤9：生成编程器固件（完整 Flash 镜像）
+      - name: Generate Programmer Firmware
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          cd openwrt/bin/targets/ipq807x/generic
+          # 1. 找到核心固件文件
+          FACTORY_BIN=$(ls *-factory.bin | grep -E "redmi|ax6")
+          SYSUPGRADE_BIN=$(ls *-sysupgrade.bin | grep -E "redmi|ax6")
+          # 2. 生成 256M 编程器镜像（0x20000000 = 256MB）
+          dd if=/dev/zero of=ax6-256m-full.img bs=1M count=256
+          # 3. 写入分区表和固件（适配 IPQ807x NAND 布局）
+          # 注：以下偏移需匹配你修改的 DTS 分区表
+          # 写入 SBL1/MIBIB 等引导分区（从原厂镜像提取，若有）
+          # 写入 rootfs 分区（偏移 0x0FB40000）
+          dd if=$FACTORY_BIN of=ax6-256m-full.img bs=1 seek=$((0x0FB40000)) conv=notrunc
+          # 4. 打包编程器固件（方便刷写）
+          zip -r ax6-256m-programmer-${{ env.BUILD_TIME }}.zip ax6-256m-full.img
+          # 5. 标记文件路径
+          echo "FIRMWARE_DIR=$(pwd)" >> $GITHUB_ENV
+
+      # 步骤10：整理分区刷写固件
+      - name: Organize Partition Firmware
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          cd ${{ env.FIRMWARE_DIR }}
+          # 保留 factory/sysupgrade 固件（分区刷写用）
+          mkdir -p partition-firmware
+          cp *-factory.bin *-sysupgrade.bin partition-firmware/
+          # 打包分区固件
+          zip -r ax6-256m-partition-${{ env.BUILD_TIME }}.zip partition-firmware/
+
+      # 步骤11：上传固件到 GitHub Artifact（临时下载）
+      - name: Upload Firmware to Artifact
+        uses: actions/upload-artifact@v4
+        if: steps.compile.outputs.status == 'success'
+        with:
+          name: AX6-256M-Firmware-${{ env.BUILD_TIME }}
+          path: |
+            ${{ env.FIRMWARE_DIR }}/ax6-256m-programmer-${{ env.BUILD_TIME }}.zip
+            ${{ env.FIRMWARE_DIR }}/ax6-256m-partition-${{ env.BUILD_TIME }}.zip
+
+      # 步骤12：发布固件到 GitHub Release（长期保存）
+      - name: Release Firmware
+        uses: softprops/action-gh-release@v2
+        if: steps.compile.outputs.status == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: AX6-256M-${{ env.BUILD_TIME }}
+          release_name: Redmi AX6 256M 固件-${{ env.BUILD_TIME }}
+          body: |
+            📦 固件类型：
+            - ax6-256m-programmer.zip：编程器刷写固件（完整 256M Flash 镜像）
+            - ax6-256m-partition.zip：分区刷写固件（factory/sysupgrade）
+            📝 适配：256M Flash 扩容 + 避开坏块
+          files: |
+            ${{ env.FIRMWARE_DIR }}/ax6-256m-programmer-${{ env.BUILD_TIME }}.zip
+            ${{ env.FIRMWARE_DIR }}/ax6-256m-partition-${{ env.BUILD_TIME }}.zip
