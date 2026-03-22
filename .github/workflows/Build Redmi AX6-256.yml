@@ -134,6 +134,17 @@ jobs:
         id: compile
         run: |
           cd /home/runner/work/openwrt/openwrt/openwrt
+          # 核心修改：减少编译日志输出（仅保留错误信息）
+          make -j$(nproc) > compile.log 2>&1 || (cat compile.log && make -j1 V=s)
+          # 仅输出关键信息（避免日志过长）
+          echo "编译核心日志片段："
+          grep -E "ERROR|failed|NOTICE|firmware" compile.log
+          # 原有的状态记录逻辑不变
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
+          grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+          echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
+          cd /home/runner/work/openwrt/openwrt/openwrt
           # 多线程编译，失败则单线程排错
           make -j$(nproc) || make -j1 V=s
           # 记录编译状态和固件信息
