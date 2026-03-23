@@ -82,12 +82,6 @@ jobs:
           # 执行扩容修改脚本（使用实际路径）
           $DIY_SCRIPT
 
-      # 步骤5：更新/安装 Feeds
-      - name: Update & Install Feeds
-        run: |
-          cd /home/runner/work/openwrt/openwrt/openwrt
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
 # 步骤5：更新/安装 Feeds（独立步骤，语法正确）
       - name: Update & Install Feeds
         run: |
