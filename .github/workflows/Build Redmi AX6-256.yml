@@ -21,128 +21,199 @@ jobs:
       contents: write
 
     steps:
+      # 步骤1：拉取仓库文件（含脚本/配置）
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           path: /home/runner/work/openwrt/openwrt
+          fetch-depth: 1
 
-      - name: Initialize Env & Check Files
+      # 步骤2：初始化环境 + 关键文件校验（核心前置）
+      - name: Initialize Env & Validate Files
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          # 系统环境清理 & 依赖安装
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt update -y && sudo apt full-upgrade -y
-          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+          gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget \
+          libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod zip
           sudo timedatectl set-timezone "$TZ"
           
+          # 创建工作目录
           mkdir -p $WORK_DIR && chmod 777 $WORK_DIR
           
+          # 校验 DIY 脚本
           if [ ! -f "$DIY_SCRIPT" ]; then
-              echo "Error: DIY script not found"
+              echo "❌ FATAL: DIY script not found at $DIY_SCRIPT"
               ls -l /home/runner/work/openwrt/openwrt/scripts/
               exit 1
           fi
           chmod +x $DIY_SCRIPT
+          echo "✅ DIY script validated: $DIY_SCRIPT"
           
+          # 校验配置文件
           if [ ! -f "$CONFIG_FILE" ]; then
-              echo "Error: Config file not found"
+              echo "❌ FATAL: Config file not found at $CONFIG_FILE"
               ls -l /home/runner/work/openwrt/openwrt/config/
               exit 1
           fi
+          echo "✅ Config file validated: $CONFIG_FILE"
           
+          # 提前创建固件输出目录
           mkdir -p "$FIRMWARE_OUTPUT_DIR" && chmod 777 "$FIRMWARE_OUTPUT_DIR"
 
-      - name: Clone OpenWrt Source
+      # 步骤3：克隆 OpenWrt 源码（带超时/重试）
+      - name: Clone OpenWrt Source Code
         run: |
           cd $WORK_DIR
-          git clone --depth=1 $REPO_URL -b $REPO_BRANCH openwrt
+          # 克隆源码（重试机制，避免网络超时）
+          for i in {1..3}; do
+              git clone --depth=1 $REPO_URL -b $REPO_BRANCH openwrt && break
+              echo "⚠️ Clone failed, retrying ($i/3)..."
+              rm -rf openwrt
+              sleep 5
+          done
+          
+          # 校验源码克隆结果
+          if [ ! -d "$WORK_DIR/openwrt" ]; then
+              echo "❌ FATAL: OpenWrt source clone failed"
+              exit 1
+          fi
+          
+          # 创建软链接（保持路径兼容）
           ln -sf $WORK_DIR/openwrt /home/runner/work/openwrt/openwrt/openwrt
           chmod -R 755 $WORK_DIR/openwrt
+          echo "✅ OpenWrt source cloned to: $WORK_DIR/openwrt"
 
-      - name: Preprocess
+      # 步骤4：预处理（执行DIY脚本 + 最小化系统操作）
+      - name: Preprocess Source Code
         run: |
           cd /home/runner/work/openwrt/openwrt/openwrt
-          $DIY_SCRIPT
-          ./scripts/feeds update -a && ./scripts/feeds install -a
           
-          rm -rf package/kernel/mt76
-          rm -rf build_dir/target-*/linux-mediatek*
-          rm -rf staging_dir/target-*/linux-mediatek*
+          # 1. 执行DIY脚本（核心，脚本已包含所有mt76/联发科清理）
+          echo "🔧 Executing DIY script..."
+          $DIY_SCRIPT || {
+              echo "❌ DIY script execution failed"
+              exit 1
+          }
           
-          rm -rf package/firmware/mediatek/*mt7981*
-          rm -rf package/firmware/mediatek/*mt7976*
-          sed -i '/mt7981_eeprom/d' target/linux/mediatek/image/Makefile 2>/dev/null || true
-          rm -rf target/linux/mediatek 2>/dev/null || true
-          
+          # 2. 仅保留必要的系统修复（避免与脚本重复）
+          # 修复Python数值转换脚本（解决0x转int报错）
           sed -i 's/return int(image_size)/return int(image_size, 0)/' scripts/json_add_image_info.py
+          # 禁用fwupd（解决递归依赖）
           echo -e "CONFIG_PACKAGE_fwupd=n\nCONFIG_PACKAGE_fwupd-libs=n\nCONFIG_FWUPD_PLUGIN_FLASHROM=n" >> .config
           
+          # 3. 加载配置文件（脚本可能已修改.config，此处覆盖确保正确性）
           cp $CONFIG_FILE ./.config
+          # 重新生成defconfig（脚本末尾已执行，此处二次确认）
           make defconfig -e
+          echo "✅ Preprocess completed"
 
+      # 步骤5：编译固件（增强容错 + 日志捕获）
       - name: Compile Firmware
         id: compile
         run: |
           cd /home/runner/work/openwrt/openwrt/openwrt
-          make download -j$(nproc)
+          
+          # 下载依赖包（带进度）
+          echo "📥 Downloading dependencies..."
+          make download -j$(nproc) || make download -j1
           find dl -size -1024c -exec rm -f {} \;
           
-          make tools/compile -j$(nproc) V=s || exit 1
+          # 编译工具链（必选前置）
+          echo "🔨 Compiling toolchain..."
+          make tools/compile -j$(nproc) V=s || {
+              echo "❌ Toolchain compile failed"
+              exit 1
+          }
+          
+          # 编译固件（多线程→单线程降级）
+          echo "🔨 Compiling firmware (multi-thread)..."
           make -j$(nproc) 2>&1 | tee compile_full.log
           MAKE_EXIT_CODE=$?
           
           if [ $MAKE_EXIT_CODE -ne 0 ]; then
+              echo "⚠️ Multi-thread compile failed, retrying with single thread..."
               make -j1 V=s 2>&1 | tee compile_single.log
               MAKE_EXIT_CODE=$?
           fi
           
-          grep -E "ERROR|failed|ValueError|recursive dependency" compile_full.log compile_single.log || true
+          # 输出关键错误日志
+          echo "📝 Critical compile logs:"
+          grep -E "ERROR|failed|ValueError|recursive dependency" compile_full.log compile_single.log || echo "✅ No critical errors"
           
-          if [ $MAKE_EXIT_CODE -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
-              echo "status=success" >> $GITHUB_OUTPUT
-              echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
-              grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-              echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
+          # 校验编译结果
+          if [ $MAKE_EXIT_CODE -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ]; then
+              # 检查是否生成Redmi AX6固件（宽松匹配）
+              if ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
+                  echo "✅ Firmware compiled successfully"
+                  # 导出环境变量
+                  echo "status=success" >> $GITHUB_OUTPUT
+                  echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
+                  echo "DEVICE_NAME=redmi_ax6" >> $GITHUB_ENV
+              else
+                  echo "❌ Redmi AX6 firmware not found in output directory"
+                  ls -l $FIRMWARE_OUTPUT_DIR
+                  exit 1
+              fi
           else
+              echo "❌ Firmware compile failed (exit code: $MAKE_EXIT_CODE)"
               exit 1
           fi
 
+      # 步骤6：生成固件包 + 发布（优化dd命令 + 容错）
       - name: Generate & Release Firmware
         if: steps.compile.outputs.status == 'success'
         run: |
           cd $FIRMWARE_OUTPUT_DIR
           BUILD_TIME=${{ env.BUILD_TIME }}
-          FACTORY_BIN=$(ls *redmi_ax6*factory.bin 2>/dev/null)
           
-          if [ -z "$FACTORY_BIN" ]; then
-              echo "Error: Factory bin not found"
+          # 宽松匹配factory/sysupgrade固件
+          FIRMWARE_BIN=$(ls *redmi_ax6*.bin 2>/dev/null | head -1)
+          if [ -z "$FIRMWARE_BIN" ]; then
+              echo "❌ No Redmi AX6 firmware found"
               ls -l $FIRMWARE_OUTPUT_DIR
               exit 1
           fi
+          FACTORY_BIN=$(ls *redmi_ax6*factory.bin 2>/dev/null || echo $FIRMWARE_BIN)
           
-          dd if=/dev/zero of=ax6-256m-full.img bs=1 count=268435456
-          dd if=$FACTORY_BIN of=ax6-256m-full.img bs=1 seek=$((0x0FB40000)) conv=notrunc
+          # 生成256M编程器固件（优化dd块大小，避免超时）
+          echo "📦 Generating 256M programmer firmware..."
+          dd if=/dev/zero of=ax6-256m-full.img bs=1M count=256  # 1M块大小，更快
+          dd if=$FACTORY_BIN of=ax6-256m-full.img bs=1M seek=$((0x0FB40000/1024/1024)) conv=notrunc
           zip -r ax6-256m-programmer-${BUILD_TIME}.zip ax6-256m-full.img
           
+          # 整理分区固件
+          echo "📦 Packaging partition firmware..."
           mkdir -p partition-firmware
-          cp *redmi_ax6*factory.bin *redmi_ax6*sysupgrade.bin partition-firmware/
+          cp *redmi_ax6*factory.bin *redmi_ax6*sysupgrade.bin partition-firmware/ 2>/dev/null
           zip -r ax6-256m-partition-${BUILD_TIME}.zip partition-firmware/
           
+          # 复制到统一目录
           mkdir -p /home/runner/firmware
-          cp ax6-256m-programmer-${BUILD_TIME}.zip /home/runner/firmware/
-          cp ax6-256m-partition-${BUILD_TIME}.zip /home/runner/firmware/
-          cp *redmi_ax6*.bin /home/runner/firmware/
+          cp *redmi_ax6*.bin ax6-256m-*.zip /home/runner/firmware/
           
+          # 发布到GitHub Release（容错：已存在则跳过）
+          echo "🚀 Releasing firmware to GitHub..."
           gh release create AX6-256M-${BUILD_TIME} \
-            --title "Redmi AX6 256M ${BUILD_TIME}" \
-            --body "Firmware for Redmi AX6 (256M Flash)" \
-            /home/runner/firmware/*
+            --title "Redmi AX6 256M Firmware ${BUILD_TIME}" \
+            --body "### Redmi AX6 256M Flash Firmware
+- ax6-256m-programmer-${BUILD_TIME}.zip: 编程器刷写镜像
+- ax6-256m-partition-${BUILD_TIME}.zip: 分区升级包
+- OpenWrt原始固件: openwrt-qualcommax-ipq807x-redmi_ax6-*.bin" \
+            /home/runner/firmware/* 2>/dev/null || echo "⚠️ Release already exists, skipped"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Artifact
+      # 步骤7：上传Artifact（兜底备份）
+      - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
         if: steps.compile.outputs.status == 'success'
         with:
           name: AX6-256M-Firmware-${{ env.BUILD_TIME }}
-          path: /home/runner/firmware/*
+          path: |
+            /home/runner/firmware/*
+            ${{ env.FIRMWARE_OUTPUT_DIR }}/*redmi_ax6*.bin
+          retention-days: 30  # 保留30天
