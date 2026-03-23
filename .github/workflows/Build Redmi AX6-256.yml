@@ -160,7 +160,7 @@ jobs:
       - name: Generate Programmer Firmware
         if: steps.compile.outputs.status == 'success'
         run: |
-          cd /home/runner/work/openwrt/openwrt/openwrt/bin/targets/ipq807x/generic
+          cd /home/runner/work/openwrt/openwrt/openwrt/target/linux/generic
           # 1. 找到核心固件文件
           FACTORY_BIN=$(ls *-factory.bin | grep -E "redmi|ax6")
           SYSUPGRADE_BIN=$(ls *-sysupgrade.bin | grep -E "redmi|ax6")
