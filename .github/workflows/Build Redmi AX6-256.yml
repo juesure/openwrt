@@ -49,45 +49,54 @@ jobs:
           ln -sf $WORK_DIR/openwrt /home/runner/work/openwrt/openwrt/openwrt
           chmod -R 755 $WORK_DIR/openwrt
 
-      - name: Preprocess
-        run: |
-          # 定义源码根目录（与脚本一致，避免软链接混淆）
-          OPENWRT_SRC="/home/runner/work/openwrt/openwrt/workdir/openwrt"
-          
-          # 强制切换到源码根目录（关键：所有命令都在此目录执行）
-          cd "${OPENWRT_SRC}" || {
-              echo "❌ 无法切换到源码目录 → ${OPENWRT_SRC}"
-              exit 1
-          }
-          echo "🔧 当前工作目录：$(pwd)"
-          
-          # 执行 DIY 脚本
-          ${DIY_SCRIPT} || {
-              echo "❌ DIY 脚本执行失败"
-              exit 1
-          }
-          
-          # ========== 修复 json_add_image_info.py 路径问题 ==========
-          # 1. 查找文件的实际路径（兼容不同 OpenWrt 版本）
-          JSON_FILE=$(find "${OPENWRT_SRC}" -name "json_add_image_info.py" 2>/dev/null | head -1)
-          
-          if [ -z "${JSON_FILE}" ]; then
-              echo "⚠️ 未找到 json_add_image_info.py，跳过修复（不影响编译）"
-          else
-              # 2. 修复文件内容（使用绝对路径）
-              sed -i 's/return int(image_size)/return int(image_size, 0)/' "${JSON_FILE}"
-              echo "✅ 已修复 ${JSON_FILE}"
-          fi
-          
-          # ========== 其余逻辑（确保在源码目录执行） ==========
-          # 禁用 fwupd（使用绝对路径追加到 .config）
-          echo -e "CONFIG_PACKAGE_fwupd=n\nCONFIG_PACKAGE_fwupd-libs=n\nCONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "${OPENWRT_SRC}/.config"
-          
-          # 覆盖配置文件
-          cp "${CONFIG_FILE}" "${OPENWRT_SRC}/.config"
-          
-          # 重新生成 defconfig
-          make defconfig -e
+          - name: Preprocess
+            run: |
+              # 定义源码根目录（避免软链接/相对路径混淆）
+              OPENWRT_SRC="/home/runner/work/openwrt/openwrt/workdir/openwrt"
+              
+              # 强制切换到源码根目录
+              cd "${OPENWRT_SRC}" || {
+                  echo "❌ 无法切换到源码目录 → ${OPENWRT_SRC}"
+                  exit 1
+              }
+              echo "🔧 当前工作目录：$(pwd)"
+              
+              # 执行 DIY 脚本
+              ${DIY_SCRIPT} || {
+                  echo "❌ DIY 脚本执行失败"
+                  exit 1
+              }
+              
+              # ========== 修复 json_add_image_info.py（兼容路径） ==========
+              JSON_FILE=$(find "${OPENWRT_SRC}" -name "json_add_image_info.py" 2>/dev/null | head -1)
+              if [ -n "${JSON_FILE}" ]; then
+                  sed -i 's/return int(image_size)/return int(image_size, 0)/' "${JSON_FILE}"
+                  echo "✅ 已修复 ${JSON_FILE}"
+              else
+                  echo "⚠️ 未找到 json_add_image_info.py，跳过修复"
+              fi
+              
+              # ========== 修正：禁用 fwupd（修复 echo -e 语法错误） ==========
+              # 问题根源：部分 shell 不兼容 -e 参数，改用 printf 兼容所有场景
+              printf "%s\n" "CONFIG_PACKAGE_fwupd=n" "CONFIG_PACKAGE_fwupd-libs=n" "CONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "${OPENWRT_SRC}/.config"
+              echo "✅ 已禁用 fwupd 相关配置"
+              
+              # ========== 覆盖配置文件 + 生成 defconfig ==========
+              # 检查配置文件是否存在
+              if [ -f "${CONFIG_FILE}" ]; then
+                  cp "${CONFIG_FILE}" "${OPENWRT_SRC}/.config"
+                  echo "✅ 已覆盖 .config 配置文件"
+              else
+                  echo "❌ 配置文件不存在 → ${CONFIG_FILE}"
+                  exit 1
+              fi
+              
+              # 重新生成 defconfig（确保在源码目录执行）
+              make defconfig -e || {
+                  echo "❌ 生成 defconfig 失败"
+                  exit 1
+              }
+              echo "✅ Preprocess 步骤执行完成"
       
             - name: Compile
               id: compile
