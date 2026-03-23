@@ -128,7 +128,16 @@ jobs:
           make download -j$(nproc)
           # 清理空文件避免编译报错
           find dl -size -1024c -exec rm -f {} \;
-
+      - name: Clean Mediatek Files (Critical Fix)
+        run: |
+          cd /home/runner/work/openwrt/openwrt/openwrt
+          # 删除联发科 EEPROM 相关依赖
+          rm -rf package/firmware/mediatek/*mt7981*
+          rm -rf package/firmware/mediatek/*mt7976*
+          # 清理联发科平台编译配置
+          sed -i '/mt7981_eeprom/d' target/linux/mediatek/image/Makefile
+          # 重新生成配置
+          make defconfig
       # 步骤8：编译固件（核心）
       - name: Compile Firmware
         id: compile
