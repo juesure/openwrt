@@ -426,34 +426,32 @@ define Device/qnap_301w
 endef
 TARGET_DEVICES += qnap_301w
 
-# 保留原有继承关系，补充扩容适配参数
+# 修复 Redmi AX6 配置：十六进制转十进制，解决 JSON 脚本转换错误
 define Device/redmi_ax6
     $(call Device/xiaomi_ax3600)
     DEVICE_VENDOR := Redmi
     DEVICE_MODEL := AX6
     DEVICE_PACKAGES := ipq-wifi-redmi_ax6
 
-    # 核心修改1：适配 256M NAND Flash（UBIFS 格式）
-    # 页大小：2048（AX6 NAND 芯片标准）
+    # 核心修复：所有数值改用十进制（避免 Python 转换报错）
+    # 256M Flash = 268435456 字节（替代 0x20000000）
+    # 128KiB 擦除块 = 131072 字节（标准化写法）
     PAGESIZE := 2048
-    # 擦除块大小：128KiB（匹配 DTS 中 NAND 配置）
-    BLOCKSIZE := 128KiB
-    # UBI 卷参数：-m 页大小 -p 擦除块大小 -s 子页大小
-    UBI_OPTS := -m $(PAGESIZE) -p $(BLOCKSIZE)KiB -s 2048
+    BLOCKSIZE := 131072  # 替代 128KiB，纯十进制
+    UBI_OPTS := -m 2048 -p 131072 -s 2048
 
-    # 核心修改2：rootfs 大小（匹配 DTS 中 240MB = 0xE800000）
-    # 0xE800000 = 240 * 1024 * 1024 字节
-    ROOTFS_SIZE := 0xE800000
+    # 240MB rootfs = 251658240 字节（替代 0xE800000）
+    ROOTFS_SIZE := 251658240
+    # 256MB 总固件大小（十进制）
+    IMAGE_SIZE := 268435456
 
-    # 核心修改3：总固件大小（256M Flash = 0x20000000）
-    IMAGE_SIZE := 0x20000000
-
-    # 可选：强制使用 UBIFS 格式（避坏块核心）
+    # 修复固件打包逻辑，强制 UBIFS 并检查大小
     IMAGE/factory.bin := append-ubi | check-size $$$$(IMAGE_SIZE)
     IMAGE/sysupgrade.bin := append-ubi | sysupgrade-tar rootfs=$$$$@ | check-size $$$$(IMAGE_SIZE)
+    
+    # 禁用 fwupd 相关组件，解决递归依赖
+    DEVICE_PACKAGES += -fwupd -fwupd-libs
 endef
-
-# 保留设备注册（必须）
 TARGET_DEVICES += redmi_ax6
 
 define Device/spectrum_sax1v1k
