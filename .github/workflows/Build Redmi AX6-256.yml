@@ -1,213 +1,146 @@
-# 工作流名称
 name: Build Redmi AX6 (256M)
 
-# 触发条件：手动触发（推荐）+ 代码提交触发
 on:
   push:
-    branches: [ juesure-patch-1 ]
-  workflow_dispatch: # 核心：支持手动点击触发编译
+    branches: [juesure-patch-1]
+  workflow_dispatch:
 
-# 全局环境变量
 env:
-  # 源码配置（Lean大 LEDE 源码，适配 IPQ807x）
   REPO_URL: https://github.com/juesure/openwrt/
   REPO_BRANCH: juesure-patch-1
-  # 自定义脚本路径（匹配你实际存放的位置：openwrt/scripts/diy-ax6-256m.sh）
   DIY_SCRIPT: /home/runner/work/openwrt/openwrt/scripts/diy-ax6-256m.sh
-  # 编译配置文件（提前生成的 Redmi AX6 配置）
   CONFIG_FILE: /home/runner/work/openwrt/openwrt/config/ax6-256m.config
-  # 时区
   TZ: Asia/Shanghai
-  # 定义工作目录（固定路径）
   WORK_DIR: /home/runner/work/openwrt/openwrt/workdir
-  # 固件输出目录（核心修正：高通IPQ807x正确路径）
   FIRMWARE_OUTPUT_DIR: /home/runner/work/openwrt/openwrt/openwrt/bin/targets/qualcommax/ipq807x
 
 jobs:
   build-ax6-firmware:
     runs-on: ubuntu-22.04
     permissions:
-      contents: write # 赋予 Release 发布权限
+      contents: write
 
     steps:
-      # 步骤1：拉取仓库文件（包含 scripts 目录下的 diy 脚本）
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          path: /home/runner/work/openwrt/openwrt # 强制拉取到固定路径，确保脚本位置正确
+          path: /home/runner/work/openwrt/openwrt
 
-      # 步骤2：初始化编译环境 + 关键文件检查（合并优化）
-      - name: Initialize Env & Check Critical Files
+      - name: Initialize Env & Check Files
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          # ========== 环境初始化 ==========
-          # 清理冗余文件释放空间
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt update -y && sudo apt full-upgrade -y
-          # 安装 OpenWrt 编译依赖（含 mtd-utils 用于生成编程器固件）
-          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
-          gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget \
-          libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod
           sudo timedatectl set-timezone "$TZ"
-          # 创建固定路径的工作目录（避免变量解析错误）
-          mkdir -p $WORK_DIR
-          chmod 777 $WORK_DIR
-          # ========== 关键文件检查（核心！避免exit code 2） ==========
-          # 检查自定义脚本
+          
+          mkdir -p $WORK_DIR && chmod 777 $WORK_DIR
+          
           if [ ! -f "$DIY_SCRIPT" ]; then
-              echo "❌ 自定义脚本不存在：$DIY_SCRIPT"
-              ls -l /home/runner/work/openwrt/openwrt/scripts/ # 列出目录文件
+              echo "Error: DIY script not found"
+              ls -l /home/runner/work/openwrt/openwrt/scripts/
               exit 1
-          else
-              echo "✅ 自定义脚本找到：$DIY_SCRIPT"
-              chmod +x $DIY_SCRIPT # 赋予执行权限
           fi
-          # 检查编译配置文件
+          chmod +x $DIY_SCRIPT
+          
           if [ ! -f "$CONFIG_FILE" ]; then
-              echo "❌ 编译配置文件不存在：$CONFIG_FILE"
-              ls -l /home/runner/work/openwrt/openwrt/config/ # 列出目录文件
+              echo "Error: Config file not found"
+              ls -l /home/runner/work/openwrt/openwrt/config/
               exit 1
-          else
-              echo "✅ 编译配置文件找到：$CONFIG_FILE"
           fi
-          # 提前创建固件输出目录（避免编译后目录不存在）
-          mkdir -p "$FIRMWARE_OUTPUT_DIR"
-          chmod 777 "$FIRMWARE_OUTPUT_DIR"
-          echo "✅ 固件输出目录已创建：$FIRMWARE_OUTPUT_DIR"
+          
+          mkdir -p "$FIRMWARE_OUTPUT_DIR" && chmod 777 "$FIRMWARE_OUTPUT_DIR"
 
-      # 步骤3：克隆 OpenWrt 源码 + 创建软链接（合并）
       - name: Clone OpenWrt Source
         run: |
           cd $WORK_DIR
-          # 查看磁盘空间使用情况（调试用）
-          df -hT $PWD
-          # 克隆源码（指定仓库地址和分支）
           git clone --depth=1 $REPO_URL -b $REPO_BRANCH openwrt
-          # 创建软链接，方便后续脚本访问源码目录
           ln -sf $WORK_DIR/openwrt /home/runner/work/openwrt/openwrt/openwrt
-          # 确保源码目录可写
           chmod -R 755 $WORK_DIR/openwrt
-          echo "✅ OpenWrt 源码克隆完成：$WORK_DIR/openwrt"
 
-      # 步骤4：注入补丁 + 更新Feeds + 清理冗余文件（合并核心预处理）
-      - name: Preprocess (Patch + Feeds + Clean)
+      - name: Preprocess
         run: |
           cd /home/runner/work/openwrt/openwrt/openwrt
-          # ========== 注入256M扩容补丁 ==========
-          echo "🔧 执行256M扩容脚本..."
           $DIY_SCRIPT
-          # ========== 更新/安装Feeds ==========
-          echo "🔧 更新并安装Feeds..."
           ./scripts/feeds update -a && ./scripts/feeds install -a
-          # ========== 清理mt76驱动（避免联发科冲突） ==========
-          echo "🔧 清理mt76驱动..."
+          
           rm -rf package/kernel/mt76
           rm -rf build_dir/target-*/linux-mediatek*
           rm -rf staging_dir/target-*/linux-mediatek*
-          # ========== 清理联发科残留文件 ==========
-          echo "🔧 清理联发科残留文件..."
+          
           rm -rf package/firmware/mediatek/*mt7981*
           rm -rf package/firmware/mediatek/*mt7976*
           sed -i '/mt7981_eeprom/d' target/linux/mediatek/image/Makefile 2>/dev/null || true
           rm -rf target/linux/mediatek 2>/dev/null || true
-          # ========== 修复Python数值转换脚本 ==========
-          echo "🔧 修复Python数值转换脚本..."
+          
           sed -i 's/return int(image_size)/return int(image_size, 0)/' scripts/json_add_image_info.py
-          # ========== 禁用fwupd解决递归依赖 ==========
-          echo "🔧 禁用fwupd依赖..."
           echo -e "CONFIG_PACKAGE_fwupd=n\nCONFIG_PACKAGE_fwupd-libs=n\nCONFIG_FWUPD_PLUGIN_FLASHROM=n" >> .config
-          # ========== 加载编译配置并生成最终配置 ==========
-          echo "🔧 加载AX6编译配置..."
+          
           cp $CONFIG_FILE ./.config
           make defconfig -e
-          echo "✅ 预处理全部完成"
 
-      # 步骤5：下载依赖 + 编译固件（合并核心编译逻辑）
-      - name: Download & Compile Firmware
+      - name: Compile Firmware
         id: compile
         run: |
           cd /home/runner/work/openwrt/openwrt/openwrt
-          # ========== 下载依赖包 ==========
-          echo "📥 下载编译依赖包..."
           make download -j$(nproc)
-          find dl -size -1024c -exec rm -f {} \; # 清理空文件
-          # ========== 编译工具链（避免flock报错） ==========
-          echo "🔨 编译工具链..."
-          make tools/compile -j$(nproc) V=s || { echo "❌ 工具链编译失败"; exit 1; }
-          # ========== 编译固件（多线程+单线程容错） ==========
-          echo "🔨 编译固件（多线程）..."
+          find dl -size -1024c -exec rm -f {} \;
+          
+          make tools/compile -j$(nproc) V=s || exit 1
           make -j$(nproc) 2>&1 | tee compile_full.log
           MAKE_EXIT_CODE=$?
-          # 多线程失败则单线程重试
+          
           if [ $MAKE_EXIT_CODE -ne 0 ]; then
-              echo "⚠️ 多线程编译失败，单线程重试..."
               make -j1 V=s 2>&1 | tee compile_single.log
               MAKE_EXIT_CODE=$?
           fi
-          # ========== 输出关键错误日志 ==========
-          echo "📝 编译关键日志："
-          grep -E "ERROR|failed|ValueError|recursive dependency" compile_full.log compile_single.log || echo "✅ 无明显编译错误"
-          # ========== 验证编译结果 ==========
+          
+          grep -E "ERROR|failed|ValueError|recursive dependency" compile_full.log compile_single.log || true
+          
           if [ $MAKE_EXIT_CODE -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
-              echo "✅ 固件编译成功！"
-              # 导出环境变量
               echo "status=success" >> $GITHUB_OUTPUT
               echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
               grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
               echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
           else
-              echo "❌ 固件编译失败或未生成！"
               exit 1
           fi
 
-      # 步骤6：生成固件包 + 上传发布（合并最终产物处理）
       - name: Generate & Release Firmware
         if: steps.compile.outputs.status == 'success'
         run: |
           cd $FIRMWARE_OUTPUT_DIR
-          # ========== 变量赋值 ==========
           BUILD_TIME=${{ env.BUILD_TIME }}
-          DEVICE_NAME=${{ env.DEVICE_NAME }}
-          # ========== 查找核心固件 ==========
           FACTORY_BIN=$(ls *redmi_ax6*factory.bin 2>/dev/null)
-          SYSUPGRADE_BIN=$(ls *redmi_ax6*sysupgrade.bin 2>/dev/null)
+          
           if [ -z "$FACTORY_BIN" ]; then
-              echo "❌ 未找到Redmi AX6 factory.bin固件"
+              echo "Error: Factory bin not found"
               ls -l $FIRMWARE_OUTPUT_DIR
               exit 1
           fi
-          # ========== 生成256M编程器固件 ==========
-          echo "📦 生成256M编程器固件..."
+          
           dd if=/dev/zero of=ax6-256m-full.img bs=1 count=268435456
           dd if=$FACTORY_BIN of=ax6-256m-full.img bs=1 seek=$((0x0FB40000)) conv=notrunc
           zip -r ax6-256m-programmer-${BUILD_TIME}.zip ax6-256m-full.img
-          # ========== 整理分区固件 ==========
-          echo "📦 整理分区刷写固件..."
+          
           mkdir -p partition-firmware
           cp *redmi_ax6*factory.bin *redmi_ax6*sysupgrade.bin partition-firmware/
           zip -r ax6-256m-partition-${BUILD_TIME}.zip partition-firmware/
-          # ========== 上传到Artifact ==========
-          echo "📤 上传固件到临时目录..."
+          
           mkdir -p /home/runner/firmware
           cp ax6-256m-programmer-${BUILD_TIME}.zip /home/runner/firmware/
           cp ax6-256m-partition-${BUILD_TIME}.zip /home/runner/firmware/
           cp *redmi_ax6*.bin /home/runner/firmware/
-          # ========== 发布到GitHub Release ==========
-          echo "🚀 发布固件到GitHub Release..."
+          
           gh release create AX6-256M-${BUILD_TIME} \
-            --title "Redmi AX6 256M 固件-${BUILD_TIME}" \
-            --body "📦 固件类型：
-- ax6-256m-programmer.zip：编程器刷写固件（完整256M Flash镜像）
-- ax6-256m-partition.zip：分区刷写固件（factory/sysupgrade）
-- 原始固件：openwrt-qualcommax-ipq807x-redmi_ax6-*.bin
-📝 适配：256M Flash扩容 + 避开坏块 + 修复所有编译报错" \
+            --title "Redmi AX6 256M ${BUILD_TIME}" \
+            --body "Firmware for Redmi AX6 (256M Flash)" \
             /home/runner/firmware/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 步骤7：上传Artifact（兜底备份）
-      - name: Upload Firmware to Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         if: steps.compile.outputs.status == 'success'
         with:
