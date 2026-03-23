@@ -188,7 +188,7 @@ jobs:
           cp *redmi_ax6*factory.bin *redmi_ax6*sysupgrade.bin partition-firmware/
           zip -r ax6-256m-partition-${BUILD_TIME}.zip partition-firmware/
           # ========== 上传到Artifact ==========
-          echo "📤 上传固件到Artifact..."
+          echo "📤 上传固件到临时目录..."
           mkdir -p /home/runner/firmware
           cp ax6-256m-programmer-${BUILD_TIME}.zip /home/runner/firmware/
           cp ax6-256m-partition-${BUILD_TIME}.zip /home/runner/firmware/
@@ -198,16 +198,18 @@ jobs:
           gh release create AX6-256M-${BUILD_TIME} \
             --title "Redmi AX6 256M 固件-${BUILD_TIME}" \
             --body "📦 固件类型：
-    - ax6-256m-programmer.zip：编程器刷写固件（完整256M Flash镜像）
-    - ax6-256m-partition.zip：分区刷写固件（factory/sysupgrade）
-    - 原始固件：openwrt-qualcommax-ipq807x-redmi_ax6-*.bin
-    📝 适配：256M Flash扩容 + 避开坏块 + 修复所有编译报错" \
-                /home/runner/firmware/*
-    
-        # 步骤7：上传Artifact（兜底备份）
-        - name: Upload Firmware to Artifact
-          uses: actions/upload-artifact@v4
-          if: steps.compile.outputs.status == 'success'
-          with:
-            name: AX6-256M-Firmware-${{ env.BUILD_TIME }}
-            path: /home/runner/firmware/*
+- ax6-256m-programmer.zip：编程器刷写固件（完整256M Flash镜像）
+- ax6-256m-partition.zip：分区刷写固件（factory/sysupgrade）
+- 原始固件：openwrt-qualcommax-ipq807x-redmi_ax6-*.bin
+📝 适配：256M Flash扩容 + 避开坏块 + 修复所有编译报错" \
+            /home/runner/firmware/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 步骤7：上传Artifact（兜底备份）
+      - name: Upload Firmware to Artifact
+        uses: actions/upload-artifact@v4
+        if: steps.compile.outputs.status == 'success'
+        with:
+          name: AX6-256M-Firmware-${{ env.BUILD_TIME }}
+          path: /home/runner/firmware/*
