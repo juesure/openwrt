@@ -213,7 +213,7 @@ jobs:
         if: steps.compile.outputs.status == 'success'
         with:
           name: AX6-256M-Firmware-${{ env.BUILD_TIME }}
-          path: |
-            /home/runner/firmware/*
-            ${{ env.FIRMWARE_OUTPUT_DIR }}/*redmi_ax6*.bin
+          path:
+            - /home/runner/firmware/*
+            - ${{ env.FIRMWARE_OUTPUT_DIR }}/*redmi_ax6*.bin
           retention-days: 30  # 保留30天
