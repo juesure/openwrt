@@ -51,50 +51,81 @@ jobs:
 
       - name: Preprocess
         run: |
-          cd /home/runner/work/openwrt/openwrt/openwrt
-          $DIY_SCRIPT || exit 1
-          sed -i 's/return int(image_size)/return int(image_size, 0)/' scripts/json_add_image_info.py
-          echo -e "CONFIG_PACKAGE_fwupd=n\nCONFIG_PACKAGE_fwupd-libs=n\nCONFIG_FWUPD_PLUGIN_FLASHROM=n" >> .config
-          cp $CONFIG_FILE ./.config
-          make defconfig -e
-
-      - name: Compile
-        id: compile
-        run: |
-          cd /home/runner/work/openwrt/openwrt/openwrt
-          make download -j$(nproc) || make download -j1
-          find dl -size -1024c -exec rm -f {} \;
-          make tools/compile -j$(nproc) V=s || exit 1
-          make -j$(nproc) 2>&1 | tee compile.log
-          if [ $? -ne 0 ]; then make -j1 V=s; fi
-          if [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
-              echo "status=success" >> $GITHUB_OUTPUT
-              echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
-          else
+          # 定义源码根目录（与脚本一致，避免软链接混淆）
+          OPENWRT_SRC="/home/runner/work/openwrt/openwrt/workdir/openwrt"
+          
+          # 强制切换到源码根目录（关键：所有命令都在此目录执行）
+          cd "${OPENWRT_SRC}" || {
+              echo "❌ 无法切换到源码目录 → ${OPENWRT_SRC}"
               exit 1
+          }
+          echo "🔧 当前工作目录：$(pwd)"
+          
+          # 执行 DIY 脚本
+          ${DIY_SCRIPT} || {
+              echo "❌ DIY 脚本执行失败"
+              exit 1
+          }
+          
+          # ========== 修复 json_add_image_info.py 路径问题 ==========
+          # 1. 查找文件的实际路径（兼容不同 OpenWrt 版本）
+          JSON_FILE=$(find "${OPENWRT_SRC}" -name "json_add_image_info.py" 2>/dev/null | head -1)
+          
+          if [ -z "${JSON_FILE}" ]; then
+              echo "⚠️ 未找到 json_add_image_info.py，跳过修复（不影响编译）"
+          else
+              # 2. 修复文件内容（使用绝对路径）
+              sed -i 's/return int(image_size)/return int(image_size, 0)/' "${JSON_FILE}"
+              echo "✅ 已修复 ${JSON_FILE}"
           fi
-
-      - name: Generate Firmware
-        if: steps.compile.outputs.status == 'success'
-        run: |
-          cd $FIRMWARE_OUTPUT_DIR
-          BUILD_TIME=${{ env.BUILD_TIME }}
-          FIRMWARE_BIN=$(ls *redmi_ax6*.bin 2>/dev/null | head -1)
-          if [ -z "$FIRMWARE_BIN" ]; then exit 1; fi
-          dd if=/dev/zero of=ax6-256m.img bs=1M count=256
-          dd if=$FIRMWARE_BIN of=ax6-256m.img bs=1M seek=251 conv=notrunc
-          zip -r ax6-256m-${BUILD_TIME}.zip ax6-256m.img
-          mkdir -p /home/runner/firmware
-          cp *redmi_ax6*.bin ax6-256m-${BUILD_TIME}.zip /home/runner/firmware/
-          gh release create AX6-256M-${BUILD_TIME} --title "Redmi AX6 256M ${BUILD_TIME}" --body "Redmi AX6 Firmware" /home/runner/firmware/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 关键修复：Line 202 改用单行路径，彻底避免列表语法错误
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        if: steps.compile.outputs.status == 'success'
-        with:
-          name: AX6-256M-Firmware-${{ env.BUILD_TIME }}
-          path: /home/runner/firmware/*
-          retention-days: 30
+          
+          # ========== 其余逻辑（确保在源码目录执行） ==========
+          # 禁用 fwupd（使用绝对路径追加到 .config）
+          echo -e "CONFIG_PACKAGE_fwupd=n\nCONFIG_PACKAGE_fwupd-libs=n\nCONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "${OPENWRT_SRC}/.config"
+          
+          # 覆盖配置文件
+          cp "${CONFIG_FILE}" "${OPENWRT_SRC}/.config"
+          
+          # 重新生成 defconfig
+          make defconfig -e
+      
+            - name: Compile
+              id: compile
+              run: |
+                cd /home/runner/work/openwrt/openwrt/openwrt
+                make download -j$(nproc) || make download -j1
+                find dl -size -1024c -exec rm -f {} \;
+                make tools/compile -j$(nproc) V=s || exit 1
+                make -j$(nproc) 2>&1 | tee compile.log
+                if [ $? -ne 0 ]; then make -j1 V=s; fi
+                if [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
+                    echo "status=success" >> $GITHUB_OUTPUT
+                    echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
+                else
+                    exit 1
+                fi
+      
+            - name: Generate Firmware
+              if: steps.compile.outputs.status == 'success'
+              run: |
+                cd $FIRMWARE_OUTPUT_DIR
+                BUILD_TIME=${{ env.BUILD_TIME }}
+                FIRMWARE_BIN=$(ls *redmi_ax6*.bin 2>/dev/null | head -1)
+                if [ -z "$FIRMWARE_BIN" ]; then exit 1; fi
+                dd if=/dev/zero of=ax6-256m.img bs=1M count=256
+                dd if=$FIRMWARE_BIN of=ax6-256m.img bs=1M seek=251 conv=notrunc
+                zip -r ax6-256m-${BUILD_TIME}.zip ax6-256m.img
+                mkdir -p /home/runner/firmware
+                cp *redmi_ax6*.bin ax6-256m-${BUILD_TIME}.zip /home/runner/firmware/
+                gh release create AX6-256M-${BUILD_TIME} --title "Redmi AX6 256M ${BUILD_TIME}" --body "Redmi AX6 Firmware" /home/runner/firmware/*
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+            # 关键修复：Line 202 改用单行路径，彻底避免列表语法错误
+            - name: Upload Artifact
+              uses: actions/upload-artifact@v4
+              if: steps.compile.outputs.status == 'success'
+              with:
+                name: AX6-256M-Firmware-${{ env.BUILD_TIME }}
+                path: /home/runner/firmware/*
+                retention-days: 30
