@@ -88,7 +88,6 @@ jobs:
           cd /home/runner/work/openwrt/openwrt/openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a  # 这行是独立的命令，单独放在 run 块中
-      
       # 新增：Clean mt76 Driver（Critical Fix）→ 独立步骤，层级正确
       - name: Clean mt76 Driver (Critical Fix)
         run: |
