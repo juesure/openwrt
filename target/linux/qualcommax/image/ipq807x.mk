@@ -1,12 +1,10 @@
 DTS_DIR := $(DTS_DIR)/qcom
 DEVICE_VARS += NETGEAR_BOARD_ID NETGEAR_HW_ID TPLINK_SUPPORT_STRING ZYXEL_MODEL_ID
-
 define Build/asus-fake-ramdisk
 	rm -rf $(KDIR)/tmp/fakerd
 	dd if=/dev/zero bs=32 count=1 > $(KDIR)/tmp/fakerd
 	$(info KERNEL_INITRAMFS is $(KERNEL_INITRAMFS))
 endef
-
 define Build/asus-fake-rootfs
 	$(eval comp=$(word 1,$(1)))
 	$(eval filepath=$(word 2,$(1)))
@@ -18,23 +16,18 @@ define Build/asus-fake-rootfs
 		-b 4096 -no-exports -no-sparse -no-xattrs -all-root -noappend \
 		$(wordlist 4,$(words $(1)),$(1))
 endef
-
 define Build/asus-trx
 	$(STAGING_DIR_HOST)/bin/asusuimage $(wordlist 1,$(words $(1)),$(1)) -i $@ -o $@.new
 	mv $@.new $@
 endef
-
 define Build/netgear-rbx750-qsdk-ipq-factory
 	$(CP) $(FLASH_SCRIPT) $(KDIR_TMP)/
-
 	echo "VERSION : V8.0.0.0_$(LINUX_VERSION)" > $@.metadata
 	echo "MODEL_ID : $(DEVICE_MODEL)" >> $@.metadata
-
 	$(TOPDIR)/scripts/mkits-qsdk-ipq-image.sh $@.its $(FLASH_SCRIPT) txt $@.metadata ubi $@
 	PATH=$(LINUX_DIR)/scripts/dtc:$(PATH) mkimage -f $@.its $@.new
 	@mv $@.new $@
 endef
-
 define Build/wax6xx-netgear-tar
 	mkdir $@.tmp
 	mv $@ $@.tmp/nand-ipq807x-apps.img
@@ -44,14 +37,12 @@ define Build/wax6xx-netgear-tar
 	tar -C $@.tmp/ -cf $@ .
 	rm -rf $@.tmp
 endef
-
 define Build/zyxel-nwax10ax-fit
 	$(TOPDIR)/scripts/mkits-zyxel-fit-filogic.sh \
 		$@.its $@ "$(ZYXEL_MODEL_ID) ff ff ff ff ff ff ff ff"
 	PATH=$(LINUX_DIR)/scripts/dtc:$(PATH) mkimage -f $@.its $@.new
 	@mv $@.new $@
 endef
-
 define Device/aliyun_ap8220
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -64,7 +55,6 @@ define Device/aliyun_ap8220
 	DEVICE_PACKAGES := ipq-wifi-aliyun_ap8220
 endef
 TARGET_DEVICES += aliyun_ap8220
-
 define Device/arcadyan_aw1000
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -78,7 +68,6 @@ define Device/arcadyan_aw1000
 		kmod-gpio-nxp-74hc164 kmod-usb-serial-option uqmi
 endef
 TARGET_DEVICES += arcadyan_aw1000
-
 define Device/asus_rt-ax89x
 	DEVICE_VENDOR := Asus
 	DEVICE_MODEL := RT-AX89X
@@ -108,7 +97,6 @@ endif
 endif
 endef
 TARGET_DEVICES += asus_rt-ax89x
-
 define Device/buffalo_wxr-5950ax12
 	$(call Device/FitImage)
 	DEVICE_VENDOR := Buffalo
@@ -120,7 +108,6 @@ define Device/buffalo_wxr-5950ax12
 	DEVICE_PACKAGES := ipq-wifi-buffalo_wxr-5950ax12
 endef
 TARGET_DEVICES += buffalo_wxr-5950ax12
-
 define Device/cmcc_rm2-6
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -135,7 +122,6 @@ define Device/cmcc_rm2-6
 	DEVICE_PACKAGES := ipq-wifi-cmcc_rm2-6 kmod-hwmon-gpiofan
 endef
 TARGET_DEVICES += cmcc_rm2-6
-
 define Device/compex_wpq873
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -149,7 +135,6 @@ define Device/compex_wpq873
 	IMAGE/factory.ubi := append-ubi | qsdk-ipq-factory-nand
 endef
 TARGET_DEVICES += compex_wpq873
-
 define Device/dynalink_dl-wrx36
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -162,7 +147,6 @@ define Device/dynalink_dl-wrx36
 	DEVICE_PACKAGES := ipq-wifi-dynalink_dl-wrx36
 endef
 TARGET_DEVICES += dynalink_dl-wrx36
-
 define Device/edgecore_eap102
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -176,7 +160,6 @@ define Device/edgecore_eap102
 	IMAGE/factory.ubi := append-ubi | qsdk-ipq-factory-nand
 endef
 TARGET_DEVICES += edgecore_eap102
-
 define Device/edimax_cax1800
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -189,7 +172,6 @@ define Device/edimax_cax1800
 	DEVICE_PACKAGES := ipq-wifi-edimax_cax1800
 endef
 TARGET_DEVICES += edimax_cax1800
-
 define Device/linksys_homewrk
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -204,7 +186,6 @@ define Device/linksys_homewrk
 	DEVICE_PACKAGES += kmod-leds-pca963x ipq-wifi-linksys_homewrk
 endef
 TARGET_DEVICES += linksys_homewrk
-
 define Device/linksys_mx
 	$(call Device/FitImage)
 	DEVICE_VENDOR := Linksys
@@ -218,13 +199,11 @@ define Device/linksys_mx
 	IMAGE/factory.bin := append-kernel | pad-to $$$$(KERNEL_SIZE) | append-ubi | linksys-image type=$$$$(DEVICE_MODEL)
 	DEVICE_PACKAGES := kmod-leds-pca963x
 endef
-
 define Device/linksys_mx4x00
 	$(call Device/linksys_mx)
 	SOC := ipq8174
 	DEVICE_PACKAGES += ipq-wifi-linksys_mx4200
 endef
-
 define Device/linksys_mx4200v1
 	$(call Device/linksys_mx4x00)
 	DEVICE_MODEL := MX4200
@@ -232,13 +211,11 @@ define Device/linksys_mx4200v1
 	DEVICE_PACKAGES += kmod-hci-uart
 endef
 TARGET_DEVICES += linksys_mx4200v1
-
 define Device/linksys_mx4200v2
 	$(call Device/linksys_mx4200v1)
 	DEVICE_VARIANT := v2
 endef
 TARGET_DEVICES += linksys_mx4200v2
-
 define Device/linksys_mx4300
 	$(call Device/linksys_mx4x00)
 	DEVICE_MODEL := MX4300
@@ -249,7 +226,6 @@ define Device/linksys_mx4300
 	NAND_SIZE := 1024m
 endef
 TARGET_DEVICES += linksys_mx4300
-
 define Device/linksys_mx5300
 	$(call Device/linksys_mx)
 	DEVICE_MODEL := MX5300
@@ -257,7 +233,6 @@ define Device/linksys_mx5300
 		kmod-ath10k-ct ath10k-firmware-qca9984-ct
 endef
 TARGET_DEVICES += linksys_mx5300
-
 define Device/linksys_mx8500
 	$(call Device/linksys_mx)
 	DEVICE_MODEL := MX8500
@@ -265,7 +240,6 @@ define Device/linksys_mx8500
 		ath11k-firmware-qcn9074 kmod-hci-uart
 endef
 TARGET_DEVICES += linksys_mx8500
-
 define Device/netgear_rax120v2
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -293,7 +267,6 @@ endif
 		append-metadata
 endef
 TARGET_DEVICES += netgear_rax120v2
-
 define Device/netgear_rbx750
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -308,21 +281,18 @@ define Device/netgear_rbx750
 	IMAGE/factory.chk := append-ubi | netgear-rbx750-qsdk-ipq-factory | \
 		netgear-chk
 endef
-
 define Device/netgear_rbr750
 	$(call Device/netgear_rbx750)
 	DEVICE_MODEL := RBR750
 	NETGEAR_BOARD_ID := U12H415T00_NETGEAR
 endef
 TARGET_DEVICES += netgear_rbr750
-
 define Device/netgear_rbs750
 	$(call Device/netgear_rbx750)
 	DEVICE_MODEL := RBS750
 	NETGEAR_BOARD_ID := U12H416T00_NETGEAR
 endef
 TARGET_DEVICES += netgear_rbs750
-
 define Device/netgear_sxk80
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -335,21 +305,18 @@ define Device/netgear_sxk80
 	KERNEL_SIZE := 6272k
 	NETGEAR_HW_ID := 29766265+0+512+1024+4x4+4x4+4x4
 endef
-
 define Device/netgear_sxr80
 	$(call Device/netgear_sxk80)
 	DEVICE_MODEL := SXR80
 	NETGEAR_BOARD_ID := SXR80
 endef
 TARGET_DEVICES += netgear_sxr80
-
 define Device/netgear_sxs80
 	$(call Device/netgear_sxk80)
 	DEVICE_MODEL := SXS80
 	NETGEAR_BOARD_ID := SXS80
 endef
 TARGET_DEVICES += netgear_sxs80
-
 define Device/netgear_wax218
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -370,7 +337,6 @@ endif
 		ipq-wifi-netgear_wax218
 endef
 TARGET_DEVICES += netgear_wax218
-
 define Device/netgear_wax620
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -386,7 +352,6 @@ define Device/netgear_wax620
 		ipq-wifi-netgear_wax620
 endef
 TARGET_DEVICES += netgear_wax620
-
 define Device/netgear_wax630
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -401,7 +366,6 @@ define Device/netgear_wax630
 	DEVICE_PACKAGES := kmod-spi-gpio ipq-wifi-netgear_wax630
 endef
 TARGET_DEVICES += netgear_wax630
-
 define Device/prpl_haze
 	$(call Device/FitImage)
 	$(call Device/EmmcImage)
@@ -413,7 +377,6 @@ define Device/prpl_haze
 		kmod-fs-f2fs f2fs-tools kmod-leds-lp5562
 endef
 TARGET_DEVICES += prpl_haze
-
 define Device/qnap_301w
 	$(call Device/FitImage)
 	$(call Device/EmmcImage)
@@ -425,15 +388,17 @@ define Device/qnap_301w
 	DEVICE_PACKAGES := kmod-fs-f2fs f2fs-tools ipq-wifi-qnap_301w
 endef
 TARGET_DEVICES += qnap_301w
-
 define Device/redmi_ax6
 	$(call Device/xiaomi_ax3600)
 	DEVICE_VENDOR := Redmi
 	DEVICE_MODEL := AX6
 	DEVICE_PACKAGES := ipq-wifi-redmi_ax6
+	# 新增：匹配dtsi中rootfs分区大小（245760KB）
+	ROOTFS_PARTITION_SIZE := 245760k
+	# 新增：固件总大小（256MB，对应Flash总容量）
+	IMAGE_SIZE := 262144k
 endef
 TARGET_DEVICES += redmi_ax6
-
 define Device/spectrum_sax1v1k
 	$(call Device/FitImage)
 	$(call Device/EmmcImage)
@@ -445,7 +410,6 @@ define Device/spectrum_sax1v1k
 	DEVICE_PACKAGES := kmod-fs-f2fs f2fs-tools ipq-wifi-spectrum_sax1v1k
 endef
 TARGET_DEVICES += spectrum_sax1v1k
-
 define Device/tcl_linkhub-hh500v
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -461,7 +425,6 @@ define Device/tcl_linkhub-hh500v
 		kmod-mhi-wwan-ctrl kmod-mhi-wwan-mbim
 endef
 TARGET_DEVICES += tcl_linkhub-hh500v
-
 define Device/tplink_deco-x80-5g
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -475,7 +438,6 @@ define Device/tplink_deco-x80-5g
 	 	 kmod-usb-serial-option kmod-usb-net-qmi-wwan
 endef
 TARGET_DEVICES += tplink_deco-x80-5g
-
 define Device/tplink_eap620hd-v1
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -491,7 +453,6 @@ define Device/tplink_eap620hd-v1
 	TPLINK_SUPPORT_STRING := SupportList:\r\nEAP620 HD(TP-Link|UN|AX1800-D):1.0\r\n
 endef
 TARGET_DEVICES += tplink_eap620hd-v1
-
 define Device/tplink_eap660hd-v1
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -507,7 +468,6 @@ define Device/tplink_eap660hd-v1
 	TPLINK_SUPPORT_STRING := SupportList:\r\nEAP660 HD(TP-Link|UN|AX3600-D):1.0\r\n
 endef
 TARGET_DEVICES += tplink_eap660hd-v1
-
 define Device/xiaomi_ax3600
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -519,6 +479,10 @@ define Device/xiaomi_ax3600
 	SOC := ipq8071
 	KERNEL_SIZE := 36608k
 	DEVICE_PACKAGES := ipq-wifi-xiaomi_ax3600 kmod-ath10k-ct-smallbuffers ath10k-firmware-qca9887-ct
+	# 新增：匹配dtsi中rootfs分区大小（245760KB），与redmi_ax6保持一致
+	ROOTFS_PARTITION_SIZE := 245760k
+	# 新增：固件总大小（256MB，对应Flash总容量）
+	IMAGE_SIZE := 262144k
 ifeq ($(IB),)
 ifneq ($(CONFIG_TARGET_ROOTFS_INITRAMFS),)
 	ARTIFACTS := initramfs-factory.ubi
@@ -527,7 +491,6 @@ endif
 endif
 endef
 TARGET_DEVICES += xiaomi_ax3600
-
 define Device/xiaomi_ax9000
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -548,7 +511,6 @@ endif
 endif
 endef
 TARGET_DEVICES += xiaomi_ax9000
-
 define Device/yuncore_ax880
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -563,7 +525,6 @@ define Device/yuncore_ax880
 	IMAGE/factory.bin := append-ubi | qsdk-ipq-factory-nand
 endef
 TARGET_DEVICES += yuncore_ax880
-
 define Device/zbtlink_zbt-z800ax
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -578,7 +539,6 @@ define Device/zbtlink_zbt-z800ax
 	IMAGE/factory.bin := append-ubi | qsdk-ipq-factory-nand
 endef
 TARGET_DEVICES += zbtlink_zbt-z800ax
-
 define Device/zte_mf269
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -592,7 +552,6 @@ define Device/zte_mf269
 	DEVICE_PACKAGES := ipq-wifi-zte_mf269
 endef
 TARGET_DEVICES += zte_mf269
-
 define Device/zyxel_nbg7815
 	$(call Device/FitImage)
 	$(call Device/EmmcImage)
@@ -604,7 +563,6 @@ define Device/zyxel_nbg7815
 		kmod-hci-uart kmod-hwmon-tmp103
 endef
 TARGET_DEVICES += zyxel_nbg7815
-
 define Device/zyxel_nwax10ax_common
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -615,7 +573,6 @@ define Device/zyxel_nwax10ax_common
 	IMAGES += factory.bin
 	IMAGE/factory.bin := append-ubi | check-size $$$$(IMAGE_SIZE) | zyxel-nwax10ax-fit
 endef
-
 define Device/zyxel_nwa110ax
 	$(call Device/zyxel_nwax10ax_common)
 	DEVICE_MODEL := NWA110AX
@@ -625,7 +582,6 @@ define Device/zyxel_nwa110ax
 	ZYXEL_MODEL_ID := 59 e1
 endef
 TARGET_DEVICES += zyxel_nwa110ax
-
 define Device/zyxel_nwa210ax
 	$(call Device/zyxel_nwax10ax_common)
 	DEVICE_MODEL := NWA210AX
