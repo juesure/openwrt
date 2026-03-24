@@ -55,22 +55,45 @@ jobs:
           chmod -R 755 "$WORK_DIR/openwrt"
           printf "✅ 源码克隆完成\n"
 
-      - name: Preprocess
-        run: |
-          OPENWRT_SRC="$WORK_DIR/openwrt"
-          cd "$OPENWRT_SRC" || exit 1
-          printf "🔧 当前工作目录：%s\n" "$(pwd)"
-          # 执行DIY脚本
-          "$DIY_SCRIPT" || { printf "❌ DIY脚本执行失败\n"; exit 1; }
-          # 修复json文件（动态查找）
-          JSON_FILE=$(find "$OPENWRT_SRC" -name "json_add_image_info.py" 2>/dev/null | head -1)
-          [ -n "$JSON_FILE" ] && sed -i 's/return int(image_size)/return int(image_size, 0)/' "$JSON_FILE" && printf "✅ 已修复：%s\n" "$JSON_FILE"
-          # 禁用fwupd（用printf，无echo -e）
-          printf "%s\n" "CONFIG_PACKAGE_fwupd=n" "CONFIG_PACKAGE_fwupd-libs=n" "CONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "$OPENWRT_SRC/.config"
-          # 覆盖配置 + 生成defconfig
-          cp "$CONFIG_FILE" "$OPENWRT_SRC/.config"
-          make defconfig -e > /dev/null 2>&1
-          printf "✅ Preprocess 步骤完成\n"
+          - name: Preprocess
+            run: |
+              OPENWRT_SRC="$WORK_DIR/openwrt"
+              cd "$OPENWRT_SRC" || exit 1
+              printf "🔧 当前工作目录：%s\n" "$(pwd)"
+              
+              # 强制赋予DIY脚本可执行权限（核心修复）
+              chmod +x "$DIY_SCRIPT"
+              if [ ! -x "$DIY_SCRIPT" ]; then
+                  printf "❌ 赋予DIY脚本权限失败：%s\n" "$DIY_SCRIPT"
+                  exit 1
+              fi
+              
+              # 执行DIY脚本
+              "$DIY_SCRIPT" || {
+                  printf "❌ DIY脚本执行失败（日志：）\n"
+                  # 输出脚本内容，便于调试（可选）
+                  cat "$DIY_SCRIPT" 2>/dev/null
+                  exit 1
+              }
+              
+              # 修复json文件
+              JSON_FILE=$(find "$OPENWRT_SRC" -name "json_add_image_info.py" 2>/dev/null | head -1)
+              if [ -n "$JSON_FILE" ]; then
+                  sed -i 's/return int(image_size)/return int(image_size, 0)/' "$JSON_FILE"
+                  printf "✅ 已修复：%s\n" "$JSON_FILE"
+              else
+                  printf "⚠️ 未找到json_add_image_info.py，跳过修复\n"
+              fi
+              
+              # 禁用fwupd
+              printf "%s\n" "CONFIG_PACKAGE_fwupd=n" "CONFIG_PACKAGE_fwupd-libs=n" "CONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "$OPENWRT_SRC/.config"
+              
+              # 覆盖配置文件
+              cp "$CONFIG_FILE" "$OPENWRT_SRC/.config"
+              
+              # 生成defconfig
+              make defconfig -e > /dev/null 2>&1
+              printf "✅ Preprocess 步骤完成\n"
 
       # ========== 核心修复：Compile 步骤（无任何语法错误） ==========
       - name: Compile
