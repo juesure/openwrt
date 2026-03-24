@@ -1,6 +1,11 @@
 #!/bin/bash
 OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
 
+# ✅【终极修复：必须加这2行】
+cd "${OPENWRT_ROOT}"
+./scripts/feeds update -a
+./scripts/feeds install -a
+
 if [ ! -d "${OPENWRT_ROOT}" ]; then
   echo "❌ 错误：目录不存在"
   exit 1
