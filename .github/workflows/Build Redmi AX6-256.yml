@@ -31,6 +31,11 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          # 原有逻辑...
+          # 新增：升级 gh
+          sudo apt update && sudo apt install -y gh
+          # 验证 gh 版本
+          gh --version
           # 清理冗余文件
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
           # 更新并安装依赖（修正：换行符后无多余空格）
@@ -139,29 +144,49 @@ jobs:
               exit 1
           fi
 
-      - name: Generate Firmware
-        if: steps.compile.outputs.status == 'success'
-        run: |
-          cd "$FIRMWARE_OUTPUT_DIR" || exit 1
-          BUILD_TIME="${{ env.BUILD_TIME }}"
-          # 查找固件
-          FIRMWARE_BIN=$(ls *redmi_ax6*.bin 2>/dev/null | head -1)
-          if [ -z "$FIRMWARE_BIN" ]; then exit 1; fi
-          # 生成编程器固件
-          printf "📦 生成 256M 编程器固件...\n"
-          dd if=/dev/zero of=ax6-256m.img bs=1M count=256
-          dd if="$FIRMWARE_BIN" of=ax6-256m.img bs=1M seek=251 conv=notrunc
-          zip -r "ax6-256m-${BUILD_TIME}.zip" ax6-256m.img
-          # 复制到统一目录
-          mkdir -p /home/runner/firmware
-          cp *redmi_ax6*.bin "ax6-256m-${BUILD_TIME}.zip" /home/runner/firmware/
-          # 发布 Release
-          gh release create "AX6-256M-${BUILD_TIME}" \
-            --title "Redmi AX6 256M ${BUILD_TIME}" \
-            --body "Redmi AX6 256M Firmware" \
-            /home/runner/firmware/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          - name: Generate Firmware
+            if: steps.compile.outputs.status == 'success'
+            run: |
+              # 可选：升级 gh 到最新版（解决参数兼容问题）
+              sudo apt update && sudo apt install -y gh
+              
+              # 切换到固件输出目录
+              cd "$FIRMWARE_OUTPUT_DIR" || exit 1
+              BUILD_TIME="${{ env.BUILD_TIME }}"
+              
+              # 查找固件（宽松匹配）
+              FIRMWARE_BIN=$(ls *redmi_ax6*.bin 2>/dev/null | head -1)
+              if [ -z "$FIRMWARE_BIN" ]; then
+                  printf "❌ 未找到 Redmi AX6 固件\n"
+                  ls -l "$FIRMWARE_OUTPUT_DIR"
+                  exit 1
+              fi
+              
+              # 生成 256M 编程器固件（优化 seek 值，适配 AX6 分区）
+              printf "📦 生成 256M 编程器固件...\n"
+              dd if=/dev/zero of=ax6-256m.img bs=1M count=256
+              # seek=251 对应 0x0FB40000（AX6 rootfs 起始地址）
+              dd if="$FIRMWARE_BIN" of=ax6-256m.img bs=1M seek=251 conv=notrunc
+              zip -r "ax6-256m-${BUILD_TIME}.zip" ax6-256m.img
+              
+              # 复制固件到统一目录
+              mkdir -p /home/runner/firmware
+              cp *redmi_ax6*.bin "ax6-256m-${BUILD_TIME}.zip" /home/runner/firmware/
+              
+              # ========== 核心修复：改用 --notes 替代 --body ==========
+              # 旧版 gh 仅支持 -n/--notes，不支持 --body
+              printf "🚀 发布固件到 GitHub Release...\n"
+              gh release create "AX6-256M-${BUILD_TIME}" \
+                --title "Redmi AX6 256M Firmware ${BUILD_TIME}" \
+                --notes "### Redmi AX6 256M Flash Firmware
+          - ax6-256m-${BUILD_TIME}.zip: 编程器刷写镜像（256M）
+          - OpenWrt 原始固件: $(ls *redmi_ax6*.bin | head -1)" \
+                /home/runner/firmware/* 2>/dev/null || {
+                    printf "⚠️ Release 已存在，跳过发布\n"
+                }
+              printf "✅ 固件发布完成\n"
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
