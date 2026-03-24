@@ -99,53 +99,62 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
+			/* 匹配实际分区mtd0：0:sbl1，大小1024KB */
 			partition@0 {
 				label = "0:sbl1";
 				reg = <0x0 0x100000>;
 				read-only;
 			};
 
+			/* 匹配实际分区mtd1：0:mibib，大小1024KB */
 			partition@100000 {
 				label = "0:mibib";
 				reg = <0x100000 0x100000>;
 				read-only;
 			};
 
+			/* 匹配实际分区mtd2：0:qsee，大小3072KB */
 			partition@200000 {
 				label = "0:qsee";
 				reg = <0x200000 0x300000>;
 				read-only;
 			};
 
+			/* 匹配实际分区mtd3：0:devcfg，大小512KB */
 			partition@500000 {
 				label = "0:devcfg";
 				reg = <0x500000 0x80000>;
 				read-only;
 			};
 
+			/* 匹配实际分区mtd4：0:rpm，大小512KB */
 			partition@580000 {
 				label = "0:rpm";
 				reg = <0x580000 0x80000>;
 				read-only;
 			};
 
+			/* 匹配实际分区mtd5：0:cdt，大小512KB */
 			partition@600000 {
 				label = "0:cdt";
 				reg = <0x600000 0x80000>;
 				read-only;
 			};
 
+			/* 匹配实际分区mtd6：0:appsblenv，大小512KB */
 			partition@680000 {
 				label = "0:appsblenv";
 				reg = <0x680000 0x80000>;
 			};
 
+			/* 匹配实际分区mtd7：0:appsbl，大小1024KB */
 			partition@700000 {
 				label = "0:appsbl";
 				reg = <0x700000 0x100000>;
 				read-only;
 			};
 
+			/* 匹配实际分区mtd8：0:art，大小512KB，保留WiFi校准相关配置 */
 			partition@800000 {
 				label = "0:art";
 				reg = <0x800000 0x80000>;
@@ -178,29 +187,36 @@
 				};
 			};
 
+			/* 匹配实际分区mtd9：bdata，大小512KB */
 			partition@880000 {
 				label = "bdata";
 				reg = <0x880000 0x80000>;
 			};
 
+			/* 匹配实际分区mtd10：crash，大小512KB */
 			partition@900000 {
-				/* This is crash + crash_syslog parts combined */
-				label = "pstore";
-				reg = <0x900000 0x100000>;
+				label = "crash";
+				reg = <0x900000 0x80000>;
 			};
 
-			/* Make the first rootfs a dedicated ubi partition for kernel */
+			/* 匹配实际分区mtd11：crash_syslog，大小512KB */
+			partition@980000 {
+				label = "crash_syslog";
+				reg = <0x980000 0x80000>;
+			};
+
+			/* 匹配实际分区mtd12：rootfs，大小245760KB（0xf000000） */
 			partition@a00000 {
-				label = "ubi_kernel";
-				reg = <0xa00000 0x23c0000>;
+				label = "rootfs";
+				reg = <0xa00000 0xf000000>;
+				compatible = "openwrt,rootfs";
 			};
 
-			/* Place the real rootfs in the original second rootfs and
-			 * expand it to the end of the nand
-			 */
-			rootfs: partition@2dc0000 {
-				label = "rootfs";
-				reg = <0x2dc0000 0xd240000>;
+			/* 匹配实际分区mtd13：rsvd0，大小512KB */
+			partition@fa00000 {
+				label = "rsvd0";
+				reg = <0xfa00000 0x80000>;
+				read-only;
 			};
 		};
 	};
