@@ -115,34 +115,40 @@ jobs:
           make defconfig -e || exit 1
           printf "✅ Preprocess 步骤完成\n"
 
-      - name: Compile
-        id: compile
-        run: |
-          OPENWRT_SRC="$WORK_DIR/openwrt"
-          cd "$OPENWRT_SRC" || exit 1
-          # 下载依赖
-          printf "📥 下载编译依赖...\n"
-          make download -j$(nproc) || make download -j1
-          find dl -size -1024c -exec rm -f {} \;
-          # 编译工具链
-          printf "🔨 编译工具链...\n"
-          make tools/compile -j$(nproc) V=s || exit 1
-          # 编译固件
-          printf "🔨 编译固件（多线程）...\n"
-          make -j$(nproc) 2>&1 | tee compile.log
-          if [ $? -ne 0 ]; then
-              printf "⚠️ 多线程编译失败，单线程重试...\n"
-              make -j1 V=s
-          fi
-          # 校验结果
-          if [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
-              printf "✅ 固件编译成功\n"
-              echo "status=success" >> "$GITHUB_OUTPUT"
-              echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
-          else
-              printf "❌ 固件未生成\n"
-              exit 1
-          fi
+          - name: Compile
+            id: compile
+            run: |
+              OPENWRT_SRC="$WORK_DIR/openwrt"
+              cd "$OPENWRT_SRC" || exit 1
+              
+              # 关闭编译冗余输出（仅保留错误/关键信息）
+              export QUIET=1
+              export VERBOSE=0
+              
+              # 下载依赖（静默模式）
+              make download -j$(nproc) > /dev/null 2>&1 || make download -j1 > /dev/null 2>&1
+              
+              # 编译工具链（仅输出错误）
+              make tools/compile -j$(nproc) V=s 2>&1 > /dev/null || {
+                  printf "❌ 工具链编译失败\n"
+                  exit 1
+              }
+              
+              # 编译固件（仅保存日志，不输出到控制台）
+              make -j$(nproc) 2>&1 | tee "${OPENWRT_SRC}/compile.log"
+              if [ $? -ne 0 ]; then
+                  make -j1 V=s 2>&1 | tee "${OPENWRT_SRC}/compile_single.log"
+              fi
+              
+              # 校验结果（仅输出关键信息）
+              if [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
+                  printf "✅ 固件编译成功（日志已保存到 compile.log）\n"
+                  echo "status=success" >> "$GITHUB_OUTPUT"
+                  echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
+              else
+                  printf "❌ 固件未生成\n"
+                  exit 1
+              fi
 
           - name: Generate Firmware
             if: steps.compile.outputs.status == 'success'
