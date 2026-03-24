@@ -125,25 +125,10 @@ ipq807x_setup_macs()
 	[ -n "$label_mac" ] && ucidef_set_label_macaddr $label_mac
 }
 
-# ===================== 以下是我新增的关键配置（匹配新分区）=====================
-ipq807x_setup_rootfs() {
-	local board="$1"
-
-	case "$board" in
-	redmi,ax6|\
-	xiaomi,ax3600)
-		ucidef_set_rootfs "ubi0:rootfs"
-		ucidef_set_overlay "ubi0:rootfs"
-		;;
-	esac
-}
-# ===================== 新增结束 =====================
-
 board_config_update
 board=$(board_name)
 ipq807x_setup_interfaces $board
 ipq807x_setup_macs $board
-ipq807x_setup_rootfs $board  # 调用挂载配置
 board_config_flush
 
 exit 0
