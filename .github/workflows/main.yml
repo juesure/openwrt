@@ -125,7 +125,7 @@ jobs:
           
           printf "📦 生成256M编程器固件...\n"
           dd if=/dev/zero of=ax6-256m.img bs=1M count=256
-          # ========== 已修复：seek=251 → seek=0 ==========
+          # 已修复：seek=251 → seek=0
           dd if="$FIRMWARE_BIN" of=ax6-256m.img bs=1M seek=0 conv=notrunc
           zip -r "ax6-256m-${BUILD_TIME}.zip" ax6-256m.img
           
