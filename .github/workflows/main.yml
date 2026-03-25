@@ -4,7 +4,7 @@ name: Build Redmi AX6 (256M)
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPO_URL: https://github.com/juesure/openwrt/
-  REPO_BRANCH: 256M_FLASH_NOBAD_BLOCK 
+  REPO_BRANCH: 256M_FLASH_NOBAD_BLOCK
   DIY_SCRIPT: /home/runner/work/openwrt/openwrt/scripts/diy-ax6-256m.sh
   CONFIG_FILE: /home/runner/work/openwrt/openwrt/config/ax6-256m.config
   TZ: Asia/Shanghai
@@ -13,7 +13,7 @@ env:
 
 on:
   push:
-    branches: [256M_FLASH_NOBAD_BLOCK ]
+    branches: [ 256M_FLASH_NOBAD_BLOCK ]
   workflow_dispatch:
 
 jobs:
@@ -33,13 +33,9 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          # 清理冗余文件
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          # 安装依赖（单行书写，无换行错误）
           sudo apt update -y && sudo apt full-upgrade -y && sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod zip gh
-          # 设置时区
           sudo timedatectl set-timezone "$TZ"
-          # 创建目录 + 校验文件
           mkdir -p "$WORK_DIR" && chmod 777 "$WORK_DIR"
           [ ! -f "$DIY_SCRIPT" ] && { printf "❌ DIY脚本不存在\n"; exit 1; } && chmod +x "$DIY_SCRIPT"
           [ ! -f "$CONFIG_FILE" ] && { printf "❌ 配置文件不存在\n"; exit 1; }
@@ -48,7 +44,6 @@ jobs:
       - name: Clone Source
         run: |
           cd "$WORK_DIR" || { printf "❌ 进入工作目录失败\n"; exit 1; }
-          # 克隆源码（单行命令，无换行）
           for i in {1..3}; do git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt && break; rm -rf openwrt; sleep 5; done
           [ ! -d "$WORK_DIR/openwrt" ] && { printf "❌ 源码克隆失败\n"; exit 1; }
           ln -sf "$WORK_DIR/openwrt" /home/runner/work/openwrt/openwrt/openwrt
@@ -61,22 +56,18 @@ jobs:
           cd "$OPENWRT_SRC" || exit 1
           printf "🔧 当前工作目录：%s\n" "$(pwd)"
           
-          # 强制赋予DIY脚本可执行权限（核心修复）
           chmod +x "$DIY_SCRIPT"
           if [ ! -x "$DIY_SCRIPT" ]; then
               printf "❌ 赋予DIY脚本权限失败：%s\n" "$DIY_SCRIPT"
               exit 1
           fi
           
-          # 执行DIY脚本
           "$DIY_SCRIPT" || {
-              printf "❌ DIY脚本执行失败（日志：）\n"
-              # 输出脚本内容，便于调试（可选）
+              printf "❌ DIY脚本执行失败\n"
               cat "$DIY_SCRIPT" 2>/dev/null
               exit 1
           }
           
-          # 修复json文件
           JSON_FILE=$(find "$OPENWRT_SRC" -name "json_add_image_info.py" 2>/dev/null | head -1)
           if [ -n "$JSON_FILE" ]; then
               sed -i 's/return int(image_size)/return int(image_size, 0)/' "$JSON_FILE"
@@ -85,40 +76,36 @@ jobs:
               printf "⚠️ 未找到json_add_image_info.py，跳过修复\n"
           fi
           
-          # 禁用fwupd
-          printf "%s\n" "CONFIG_PACKAGE_fwupd=n" "CONFIG_PACKAGE_fwupd-libs=n" "CONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "$OPENWRT_SRC/.config"
+          echo "CONFIG_PACKAGE_fwupd=n" >> "$OPENWRT_SRC/.config"
+          echo "CONFIG_PACKAGE_fwupd-libs=n" >> "$OPENWRT_SRC/.config"
+          echo "CONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "$OPENWRT_SRC/.config"
           
-          # 覆盖配置文件
           cp "$CONFIG_FILE" "$OPENWRT_SRC/.config"
-          
-          # 生成defconfig
-          make defconfig -e > /dev/null 2>&1
+          make defconfig -e
           printf "✅ Preprocess 步骤完成\n"
 
-      # ========== 核心修复：Compile 步骤（无任何语法错误） ==========
       - name: Compile
         id: compile
         run: |
           OPENWRT_SRC="$WORK_DIR/openwrt"
           cd "$OPENWRT_SRC" || exit 1
-          # 下载依赖（静默模式）
           printf "📥 下载编译依赖...\n"
-          make download -j$(nproc) > /dev/null 2>&1 || make download -j1 > /dev/null 2>&1
+          make download -j$(nproc)
           find dl -size -1024c -exec rm -f {} \;
-          # 编译工具链
+          
           printf "🔨 编译工具链...\n"
-          make tools/compile -j$(nproc) V=s > /dev/null 2>&1 || { printf "❌ 工具链编译失败\n"; exit 1; }
-          # 编译固件
+          make tools/compile -j$(nproc) V=s || { printf "❌ 工具链编译失败\n"; exit 1; }
+          
           printf "🔨 编译固件（多线程）...\n"
-          make -j$(nproc) > /dev/null 2>&1
+          make -j$(nproc)
           COMPILE_STATUS=$?
-          # 单线程重试
+          
           if [ $COMPILE_STATUS -ne 0 ]; then
               printf "⚠️ 多线程编译失败，单线程重试...\n"
-              make -j1 V=s > /dev/null 2>&1
+              make -j1 V=s
               COMPILE_STATUS=$?
           fi
-          # 校验结果
+          
           if [ $COMPILE_STATUS -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
               printf "✅ 固件编译成功\n"
               echo "status=success" >> "$GITHUB_OUTPUT"
@@ -133,18 +120,18 @@ jobs:
         run: |
           cd "$FIRMWARE_OUTPUT_DIR" || exit 1
           BUILD_TIME="${{ env.BUILD_TIME }}"
-          # 查找固件
           FIRMWARE_BIN=$(ls *redmi_ax6*.bin 2>/dev/null | head -1)
           [ -z "$FIRMWARE_BIN" ] && { printf "❌ 未找到固件\n"; exit 1; }
-          # 生成编程器固件
+          
           printf "📦 生成256M编程器固件...\n"
-          dd if=/dev/zero of=ax6-256m.img bs=1M count=256 > /dev/null 2>&1
-          dd if="$FIRMWARE_BIN" of=ax6-256m.img bs=1M seek=251 conv=notrunc > /dev/null 2>&1
-          zip -r "ax6-256m-${BUILD_TIME}.zip" ax6-256m.img > /dev/null 2>&1
-          # 复制固件
+          dd if=/dev/zero of=ax6-256m.img bs=1M count=256
+          # ========== 已修复：seek=251 → seek=0 ==========
+          dd if="$FIRMWARE_BIN" of=ax6-256m.img bs=1M seek=0 conv=notrunc
+          zip -r "ax6-256m-${BUILD_TIME}.zip" ax6-256m.img
+          
           mkdir -p /home/runner/firmware
           cp *redmi_ax6*.bin "ax6-256m-${BUILD_TIME}.zip" /home/runner/firmware/
-          # 发布Release（用--notes替代--body）
+          
           gh release create "AX6-256M-${BUILD_TIME}" --title "Redmi AX6 256M ${BUILD_TIME}" --notes "Redmi AX6 256M Firmware" /home/runner/firmware/* 2>/dev/null || printf "⚠️ Release已存在\n"
           printf "✅ 固件发布完成\n"
         env:
