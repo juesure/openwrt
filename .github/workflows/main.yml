@@ -29,16 +29,17 @@ jobs:
           fetch-depth: 1
 
       - name: Initialize Env
-        env:
-          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo apt update -y && sudo apt full-upgrade -y
-          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod zip gh
+          sudo apt update -y > /dev/null 2>&1
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod zip gh > /dev/null 2>&1
           sudo timedatectl set-timezone "$TZ"
-          mkdir -p "$WORK_DIR" && chmod 777 "$WORK_DIR"
+          mkdir -p "$WORK_DIR"
           chmod +x "$DIY_SCRIPT"
-          mkdir -p "$FIRMWARE_OUTPUT_DIR" && chmod 777 "$FIRMWARE_OUTPUT_DIR"
+
+      - name: Clean Workdir
+        run: |
+          rm -rf "$WORK_DIR/openwrt"
+          mkdir -p "$WORK_DIR/openwrt"
 
       - name: Clone Source
         run: |
@@ -50,45 +51,46 @@ jobs:
           cd "$WORK_DIR/openwrt"
           "$DIY_SCRIPT"
           cp "$CONFIG_FILE" .config
-          make defconfig
+          make defconfig > /dev/null 2>&1
 
       - name: Compile
         id: compile
         run: |
           cd "$WORK_DIR/openwrt"
-          make download -j$(nproc)
+          make download -j$(nproc) > /dev/null 2>&1
           make -j$(nproc) || make -j1 V=s
-          echo "status=success" >> "$GITHUB_OUTPUT"
-          echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
 
-      - name: Generate Firmware
+      - name: Generate Firmware + RootFS
         if: steps.compile.outputs.status == 'success'
         run: |
           cd "$FIRMWARE_OUTPUT_DIR"
           BUILD_TIME="${{ env.BUILD_TIME }}"
+
+          # 定位固件
           FIRMWARE_BIN=$(ls *redmi_ax6*.bin 2>/dev/null | head -1)
-          ROOTFS_IMG=$(ls *rootfs.img 2>/dev/null | head -1)
+          ROOTFS_FILE=$(ls *rootfs.img 2>/dev/null | head -1)
 
           # 生成编程器固件
           dd if=/dev/zero of=ax6-256m.img bs=1M count=256 status=none
           dd if="$FIRMWARE_BIN" of=ax6-256m.img bs=1M seek=0 conv=notrunc status=none
-          zip -q -r "ax6-256m-${BUILD_TIME}.zip" ax6-256m.img
+          zip -q -r ax6-256m-${BUILD_TIME}.zip ax6-256m.img
 
-          # 直接复制原生 rootfs.img（最稳，不做任何解压操作）
-          cp "$ROOTFS_IMG" redmi_ax6_mtd12_rootfs.bin
+          # 生成救砖 rootfs (直接复制，不做任何解压)
+          cp "$ROOTFS_FILE" redmi_ax6_mtd12_rootfs.bin
 
-          # 复制到发布目录
+          # 输出
           mkdir -p /home/runner/firmware
           cp *.bin *.zip /home/runner/firmware/ 2>/dev/null
 
           # 发布
-          gh release create "AX6-256M-${BUILD_TIME}" /home/runner/firmware/* -R ${GITHUB_REPOSITORY} 2>/dev/null
+          gh release create "AX6-256M-${BUILD_TIME}" /home/runner/firmware/* -R ${GITHUB_REPOSITORY} 2>/dev/null || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
-        if: steps.compile.outputs.status == 'success'
         with:
-          name: "AX6-256M-Firmware-${{ env.BUILD_TIME }}"
+          name: AX6-256M-Firmware-${{ env.BUILD_TIME }}
           path: /home/runner/firmware/*
