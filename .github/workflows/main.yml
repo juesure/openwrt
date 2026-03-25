@@ -115,24 +115,29 @@ jobs:
               exit 1
           fi
 
-      - name: Generate Firmware
+      - name: Generate Firmware + Extract RootFS (MTD12 Rescue)
         if: steps.compile.outputs.status == 'success'
         run: |
           cd "$FIRMWARE_OUTPUT_DIR" || exit 1
           BUILD_TIME="${{ env.BUILD_TIME }}"
           FIRMWARE_BIN=$(ls *redmi_ax6*.bin 2>/dev/null | head -1)
+          ROOTFS_IMG=$(ls *rootfs.img.gz 2>/dev/null | head -1)
           [ -z "$FIRMWARE_BIN" ] && { printf "❌ 未找到固件\n"; exit 1; }
           
           printf "📦 生成256M编程器固件...\n"
           dd if=/dev/zero of=ax6-256m.img bs=1M count=256
-          # 已修复：seek=251 → seek=0
           dd if="$FIRMWARE_BIN" of=ax6-256m.img bs=1M seek=0 conv=notrunc
           zip -r "ax6-256m-${BUILD_TIME}.zip" ax6-256m.img
           
+          # ===================== 新增：提取纯 rootfs.bin (MTD12 救砖专用) =====================
+          printf "📦 生成 MTD12 专用 rootfs.bin ...\n"
+          gzip -dc "$ROOTFS_IMG" > "redmi_ax6_mtd12_rootfs.bin"
+          
           mkdir -p /home/runner/firmware
           cp *redmi_ax6*.bin "ax6-256m-${BUILD_TIME}.zip" /home/runner/firmware/
+          cp "redmi_ax6_mtd12_rootfs.bin" /home/runner/firmware/
           
-          gh release create "AX6-256M-${BUILD_TIME}" --title "Redmi AX6 256M ${BUILD_TIME}" --notes "Redmi AX6 256M Firmware" /home/runner/firmware/* 2>/dev/null || printf "⚠️ Release已存在\n"
+          gh release create "AX6-256M-${BUILD_TIME}" --title "Redmi AX6 256M ${BUILD_TIME}" --notes "✅ sysupgrade.bin\n✅ rootfs_mtd12.bin (救砖专用)\n✅ 256M编程器固件" /home/runner/firmware/* 2>/dev/null || printf "⚠️ Release已存在\n"
           printf "✅ 固件发布完成\n"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
