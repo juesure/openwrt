@@ -392,13 +392,15 @@ define Device/redmi_ax6
 	$(call Device/xiaomi_ax3600)
 	DEVICE_VENDOR := Redmi
 	DEVICE_MODEL := AX6
-	DEVICE_PACKAGES := ipq-wifi-redmi_ax6
-	# 新增：匹配dtsi中rootfs分区大小（245760KB）
-	ROOTFS_PARTITION_SIZE := 245760k
-	# 新增：固件总大小（256MB，对应Flash总容量）
+	# 256M Flash 配置
 	IMAGE_SIZE := 262144k
+	# UBI 优化参数
+	UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB
+	# 强制生成UBI镜像
+	IMAGES += factory.ubi
+	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
+	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 ubi-utils
 endef
-TARGET_DEVICES += redmi_ax6
 define Device/spectrum_sax1v1k
 	$(call Device/FitImage)
 	$(call Device/EmmcImage)
