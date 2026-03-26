@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
+/* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
 
 #include "ipq8074-512m.dtsi"
 #include "ipq8074-ac-cpu.dtsi"
@@ -8,6 +8,8 @@
 #include <dt-bindings/input/input.h>
 
 / {
+	/* 通用定义，不包括NAND分区 */
+	
 	aliases {
 		serial0 = &blsp1_uart5;
 		led-boot = &led_system_yellow;
@@ -24,7 +26,7 @@
 
 	keys {
 		compatible = "gpio-keys";
-
+		
 		reset {
 			label = "reset";
 			gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
@@ -71,148 +73,10 @@
 	status = "okay";
 };
 
-&qpic_nand {
-	status = "okay";
-
-	/*
-	 * Bootloader will find the NAND DT node by the compatible and
-	 * then "fixup" it by adding the partitions from the SMEM table
-	 * using the legacy bindings thus making it impossible for us
-	 * to change the partition table or utilize NVMEM for calibration.
-	 * So add a dummy partitions node that bootloader will populate
-	 * and set it as disabled so the kernel ignores it instead of
-	 * printing warnings due to the broken way bootloader adds the
-	 * partitions.
-	 */
-	partitions {
-		status = "disabled";
-	};
-
-	nand@0 {
-		reg = <0>;
-		nand-ecc-strength = <4>;
-		nand-ecc-step-size = <512>;
-		nand-bus-width = <8>;
-
-		partitions {
-			compatible = "fixed-partitions";
-			#address-cells = <1>;
-			#size-cells = <1>;
-
-			partition@0 {
-				label = "0:sbl1";
-				reg = <0x0000000 0x00100000>;
-				read-only;
-			};
-
-			partition@100000 {
-				label = "0:mibib";
-				reg = <0x0100000 0x0100000>;
-				read-only;
-			};
-
-			partition@200000 {
-				label = "0:qsee";
-				reg = <0x0200000 0x0300000>;
-				read-only;
-			};
-
-			partition@500000 {
-				label = "0:devcfg";
-				reg = <0x0500000 0x0080000>;
-				read-only;
-			};
-
-			partition@580000 {
-				label = "0:rpm";
-				reg = <0x0580000 0x0080000>;
-				read-only;
-			};
-
-			partition@600000 {
-				label = "0:cdt";
-				reg = <0x0600000 0x0080000>;
-				read-only;
-			};
-
-			partition@680000 {
-				label = "0:appsblenv";
-				reg = <0x0680000 0x0080000>;
-				read-only;
-			};
-
-			partition@700000 {
-				label = "0:appsbl";
-				reg = <0x0700000 0x0100000>;
-				read-only;
-			};
-
-			partition@800000 {
-				label = "0:art";
-				reg = <0x0800000 0x0080000>;
-				read-only;
-
-				nvmem-layout {
-					compatible = "fixed-layout";
-					#address-cells = <1>;
-					#size-cells = <1>;
-
-					macaddr_dp2: macaddr@6 {
-						reg = <0x6 0x6>;
-					};
-
-					macaddr_dp3: macaddr@c {
-						reg = <0xc 0x6>;
-					};
-
-					macaddr_dp4: macaddr@12 {
-						reg = <0x12 0x6>;
-					};
-
-					macaddr_dp5: macaddr@18 {
-						reg = <0x18 0x6>;
-					};
-
-					caldata_qca9889: caldata@4d000 {
-						reg = <0x33000 0x844>;
-					};
-				};
-			};
-
-			partition@880000 {
-				label = "bdata";
-				reg = <0x0880000 0x0080000>;
-			};
-
-			partition@900000 {
-				label = "crash";
-				reg = <0x0900000 0x0080000>;
-			};
-
-			partition@980000 {
-				label = "crash_syslog";
-				reg = <0x0980000 0x0080000>;
-			};
-
-			/* 严格匹配你的 mtd12 */
-			partition@a00000 {
-				label = "rootfs";
-				reg = <0x0a00000 0x0f000000>;
-			};
-
-			/* 严格匹配你的 mtd13 */
-			partition@fa00000 {
-				label = "rsvd0";
-				reg = <0x0fa00000 0x0080000>;
-				read-only;
-			};
-		};
-	};
-};
+/* 不定义 qpic_nand，留给子设备定义 */
 
 &mdio {
 	status = "okay";
-
 	pinctrl-0 = <&mdio_pins>;
 	pinctrl-names = "default";
 	reset-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
@@ -247,10 +111,9 @@
 
 &switch {
 	status = "okay";
-
-	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>; /* lan port bitmap */
-	switch_wan_bmp = <ESS_PORT2>; /* wan port bitmap */
-	switch_mac_mode = <MAC_MODE_PSGMII>; /* mac mode for uniphy instance0*/
+	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>;
+	switch_wan_bmp = <ESS_PORT2>;
+	switch_mac_mode = <MAC_MODE_PSGMII>;
 
 	qcom,port_phyinfo {
 		port@2 {
@@ -310,6 +173,4 @@
 
 &wifi {
 	status = "okay";
-
-	qcom,ath11k-fw-memory-mode = <1>;
 };
