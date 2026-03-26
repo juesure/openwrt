@@ -389,11 +389,11 @@ define Device/qnap_301w
 endef
 TARGET_DEVICES += qnap_301w
 define Device/redmi_ax6
-	$(call Device/xiaomi_ax3600)
-	DEVICE_VENDOR := Redmi
-	DEVICE_MODEL := AX6
-	IMAGE_SIZE := 262144k
-	DEVICE_PACKAGES := ipq-wifi-redmi_ax6
+    $(call Device/xiaomi_ax3600)
+    DEVICE_VENDOR := Redmi
+    DEVICE_MODEL := AX6
+    IMAGE_SIZE := 245760k  # 240MB
+    DEVICE_PACKAGES := ipq-wifi-redmi_ax6
 endef
 define Device/spectrum_sax1v1k
 	$(call Device/FitImage)
