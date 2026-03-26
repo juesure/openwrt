@@ -88,28 +88,43 @@ jobs:
           make download -j$(nproc) 2>&1 | tee download.log
           
           echo "开始编译固件..."
-          make -j1 V=s 2>&1 | tee compile.log
+          # 使用 V=s 获取详细输出，但只编译必要目标
+          make -j$(nproc) V=s 2>&1 | tee compile.log
           
-          # 检查编译结果
-          echo "=========================================="
-          echo "检查生成的文件..."
-          echo "=========================================="
+          # 获取编译退出码
+          COMPILE_EXIT=${PIPESTATUS[0]}
           
-          # 显示所有生成的文件
-          find bin -type f -name "*redmi*" -o -name "*ax6*" 2>/dev/null | while read f; do
-            echo "找到: $f"
-            ls -lh "$f"
-          done
+          if [ $COMPILE_EXIT -ne 0 ]; then
+            echo "❌ 编译失败，退出码: $COMPILE_EXIT"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
           
-          # 检查是否生成了 sysupgrade.bin
-          if [ -f bin/targets/qualcommax/ipq807x/*redmi_ax6*sysupgrade.bin ]; then
+          # 确保必要的文件存在
+          echo "清理构建并生成最终文件..."
+          make target/linux/install V=s 2>&1 | tee finalize.log
+          
+          # 手动处理 checksum（如果需要）
+          echo "生成校验和..."
+          cd bin/targets/qualcommax/ipq807x/
+          if [ -f *sysupgrade.bin ]; then
+            sha256sum *sysupgrade.bin > sha256sums
+            md5sum *sysupgrade.bin > md5sums
+            echo "✅ 校验和文件已生成"
+          fi
+          cd ../../../../../
+          
+          # 检查结果
+          if ls bin/targets/qualcommax/ipq807x/*redmi_ax6*sysupgrade.bin 2>/dev/null; then
             echo "✅ 固件编译成功"
             echo "status=success" >> $GITHUB_OUTPUT
+            
+            # 显示固件信息
+            echo "=========================================="
+            echo "固件信息："
+            ls -lh bin/targets/qualcommax/ipq807x/*redmi_ax6*
           else
-            echo "❌ 固件编译失败，查看 bin 目录内容："
-            ls -la bin/targets/qualcommax/ipq807x/ 2>/dev/null || echo "目录不存在"
-            echo "最后200行编译日志："
-            tail -200 compile.log
+            echo "❌ 未找到固件文件"
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
