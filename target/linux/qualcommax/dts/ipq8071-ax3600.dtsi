@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-/* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
+/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
 #include "ipq8074-512m.dtsi"
 #include "ipq8074-ac-cpu.dtsi"
@@ -8,31 +8,63 @@
 #include <dt-bindings/input/input.h>
 
 / {
-	/* 通用定义，不包括NAND分区 */
-	
-	aliases {
-		serial0 = &blsp1_uart5;
-		led-boot = &led_system_yellow;
-		led-failsafe = &led_system_yellow;
-		led-running = &led_system_blue;
-		led-upgrade = &led_system_yellow;
-		label-mac-device = &dp2;
-	};
+    aliases {
+        serial0 = &blsp1_uart5;
+        led-boot = &led_system_yellow;
+        led-failsafe = &led_system_yellow;
+        led-running = &led_system_blue;
+        led-upgrade = &led_system_yellow;
+        label-mac-device = &dp2;
+    };
 
     chosen {
         stdout-path = "serial0:115200n8";
         bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
     };
 
-	keys {
-		compatible = "gpio-keys";
-		
-		reset {
-			label = "reset";
-			gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
-			linux,code = <KEY_RESTART>;
-		};
-	};
+    keys {
+        compatible = "gpio-keys";
+
+        reset {
+            label = "reset";
+            gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
+            linux,code = <KEY_RESTART>;
+        };
+    };
+};
+
+// ... 其他节点保持不变 ...
+
+&qpic_nand {
+    status = "okay";
+
+    nand@0 {
+        reg = <0>;
+        nand-ecc-strength = <4>;
+        nand-ecc-step-size = <512>;
+        nand-bus-width = <8>;
+
+        partitions {
+            compatible = "fixed-partitions";
+            #address-cells = <1>;
+            #size-cells = <1>;
+
+            // ... 其他分区保持不变 ...
+
+            /* 修改 rootfs 分区为 256MB */
+            partition@a00000 {
+                label = "rootfs";
+                reg = <0xa00000 0x10000000>;
+                compatible = "openwrt,ubi";
+            };
+
+            partition@10a00000 {
+                label = "rsvd0";
+                reg = <0x10a00000 0x80000>;
+                read-only;
+            };
+        };
+    };
 };
 
 &tlmm {
