@@ -147,7 +147,7 @@
 			partition@a00000 {
 				label = "rootfs";
 				reg = <0xa00000 0x10000000>;
-				compatible = "openwrt,rootfs";
+				compatible = "openwrt,ubi";
 			};
 
 			partition@10a00000 {
