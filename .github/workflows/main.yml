@@ -84,26 +84,31 @@ jobs:
         run: |
           cd "$WORK_DIR/openwrt"
           
-          # 确保工具链存在
-          export PATH=$PATH:$PWD/staging_dir/toolchain-aarch64_cortex-a53_gcc-*_musl/bin
-          
           echo "开始下载源码包..."
           make download -j$(nproc) 2>&1 | tee download.log
           
           echo "开始编译固件..."
-          # 清理之前的编译残留
-          make clean 2>/dev/null || true
-          
-          # 使用单线程编译，输出详细日志
           make -j1 V=s 2>&1 | tee compile.log
           
           # 检查编译结果
+          echo "=========================================="
+          echo "检查生成的文件..."
+          echo "=========================================="
+          
+          # 显示所有生成的文件
+          find bin -type f -name "*redmi*" -o -name "*ax6*" 2>/dev/null | while read f; do
+            echo "找到: $f"
+            ls -lh "$f"
+          done
+          
+          # 检查是否生成了 sysupgrade.bin
           if [ -f bin/targets/qualcommax/ipq807x/*redmi_ax6*sysupgrade.bin ]; then
             echo "✅ 固件编译成功"
             echo "status=success" >> $GITHUB_OUTPUT
           else
-            echo "❌ 固件编译失败"
-            echo "最后200行错误日志："
+            echo "❌ 固件编译失败，查看 bin 目录内容："
+            ls -la bin/targets/qualcommax/ipq807x/ 2>/dev/null || echo "目录不存在"
+            echo "最后200行编译日志："
             tail -200 compile.log
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
