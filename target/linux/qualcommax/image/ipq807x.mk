@@ -393,10 +393,7 @@ define Device/redmi_ax6
 	DEVICE_VENDOR := Redmi
 	DEVICE_MODEL := AX6
 	IMAGE_SIZE := 262144k
-	UBINIZE_OPTS := -m 2048 -p 128KiB -s 2048 -O 2048 -E 5
-	IMAGES += factory.ubi
-	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
-	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 ubi-utils mtd-utils
+	DEVICE_PACKAGES := ipq-wifi-redmi_ax6
 endef
 define Device/spectrum_sax1v1k
 	$(call Device/FitImage)
