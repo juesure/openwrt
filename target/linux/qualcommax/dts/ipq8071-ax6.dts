@@ -34,20 +34,6 @@
 	};
 };
 
-/* 只覆盖需要修改的分区大小 */
-&qpic_nand {
-	nand@0 {
-		partitions {
-			partition@a00000 {
-				reg = <0xa00000 0x10000000>;
-				compatible = "openwrt,ubi";
-			};
-		};
-	};
-};
-
-/* 只覆盖WiFi配置 */
 &wifi {
 	qcom,ath11k-calibration-variant = "Redmi-AX6";
-	qcom,ath11k-fw-memory-mode = <2>;
 };
