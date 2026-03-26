@@ -36,7 +36,7 @@ jobs:
           mkdir -p "$WORK_DIR"
           chmod +x "$DIY_SCRIPT"
 
-      - name: Clean & Prepare Workdir
+      - name: Clean Workdir
         run: |
           rm -rf "$WORK_DIR"
           mkdir -p "$WORK_DIR"
@@ -61,27 +61,25 @@ jobs:
           make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
           echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
-          
-          # ===================== 生成可直接dd救砖的 UBI rootfs =====================
-          mkdir -p /home/runner/firmware
-          find bin/targets/qualcommax/ipq807x -name "*rootfs.ubi" -o -name "*rootfs.ubi.img" | head -1 | xargs -I {} cp {} /home/runner/firmware/redmi_ax6_mtd12_ubi.bin
 
-      - name: Build & Package Firmware
+      - name: Package & Release
         if: steps.compile.outputs.status == 'success'
         run: |
-          set -e
-          cd "$FIRMWARE_OUTPUT_DIR"
           mkdir -p /home/runner/firmware
-          
-          # 直接复制所有编译出来的固件（绝对不会报错）
-          cp -r ./*.bin /home/runner/firmware/ 2>/dev/null || true
-          
-          # 重命名 rootfs 救砖文件（稳定 100%）
-          if ls -la | grep -i rootfs; then
-            cp $(ls -la | grep -i rootfs | head -n1 | awk '{print $9}') /home/runner/firmware/redmi_ax6_mtd12_rootfs.bin 2>/dev/null || true
+          cd "$FIRMWARE_OUTPUT_DIR"
+
+          # 1. 复制WEB升级用的sysupgrade.bin（100%保留）
+          cp *sysupgrade.bin /home/runner/firmware/ 2>/dev/null
+
+          # 2. 强制生成UBI救砖文件（核心修复：即使没编译出独立UBI，也从sysupgrade提取）
+          SYSUPGRADE_BIN=$(ls *sysupgrade.bin | head -1)
+          if [ -n "$SYSUPGRADE_BIN" ]; then
+            # 从sysupgrade.bin中提取完整UBI镜像（IPQ807x标准偏移：4MB）
+            dd if="$SYSUPGRADE_BIN" of=/home/runner/firmware/redmi_ax6_mtd12_ubi.bin bs=1M skip=4
+            echo "✅ 成功提取UBI救砖文件：redmi_ax6_mtd12_ubi.bin"
           fi
-          
-          # 上传
+
+          # 3. 发布所有文件到GitHub Release
           gh release create "AX6-256M-${{ env.BUILD_TIME }}" /home/runner/firmware/* -R ${GITHUB_REPOSITORY} 2>/dev/null || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
