@@ -59,6 +59,12 @@ jobs:
           cd "$WORK_DIR/openwrt"
           make download -j$(nproc) >/dev/null 2>&1
           make -j$(nproc) || make -j1 V=s
+          # 强制生成独立 UBI 镜像（如果未自动生成）
+          if [ ! -f bin/targets/qualcommax/ipq807x/*rootfs.ubi ]; then
+            # 手动生成 UBI 镜像（基于编译出的 rootfs.ubifs）
+            ubimkvol -m -n rootfs -s 240MiB -o rootfs.ubi
+            cp rootfs.ubi bin/targets/qualcommax/ipq807x/redmi_ax6_mtd12_ubi.bin
+          fi
           echo "status=success" >> $GITHUB_OUTPUT
           echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
 
