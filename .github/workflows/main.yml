@@ -30,8 +30,12 @@ jobs:
 
       - name: Initialize Env
         run: |
-          sudo apt update -y >/dev/null 2>&1
-          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod zip gh >/dev/null 2>&1
+          sudo apt update -y
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+            python3-distutils rsync unzip zlib1g-dev file wget libelf-dev \
+            libfuse-dev device-tree-compiler mtd-utils squashfs-tools \
+            dosfstools parted kmod zip gh lz4 lzop
           sudo timedatectl set-timezone "$TZ"
           mkdir -p "$WORK_DIR"
           chmod +x "$DIY_SCRIPT"
@@ -51,20 +55,21 @@ jobs:
           cd "$WORK_DIR/openwrt"
           "$DIY_SCRIPT"
           cp "$CONFIG_FILE" .config
-          make defconfig >/dev/null 2>&1
+          # 添加UBI优化选项
+          echo "CONFIG_MTD_UBI_FASTMAP=y" >> .config
+          echo "CONFIG_MTD_UBI_BLOCK=y" >> .config
+          make defconfig
 
       - name: Compile
         id: compile
         run: |
           cd "$WORK_DIR/openwrt"
-          make download -j$(nproc) >/dev/null 2>&1
-          make -j$(nproc) || make -j1 V=s
-          # 强制生成独立 UBI 镜像（如果未自动生成）
-          if [ ! -f bin/targets/qualcommax/ipq807x/*rootfs.ubi ]; then
-            # 手动生成 UBI 镜像（基于编译出的 rootfs.ubifs）
-            ubimkvol -m -n rootfs -s 240MiB -o rootfs.ubi
-            cp rootfs.ubi bin/targets/qualcommax/ipq807x/redmi_ax6_mtd12_ubi.bin
-          fi
+          make download -j$(nproc)
+          make -j$(nproc) V=s || make -j1 V=s
+          
+          # 检查生成的文件
+          ls -la bin/targets/qualcommax/ipq807x/
+          
           echo "status=success" >> $GITHUB_OUTPUT
           echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
 
@@ -74,19 +79,26 @@ jobs:
           mkdir -p /home/runner/firmware
           cd "$FIRMWARE_OUTPUT_DIR"
 
-          # 1. 复制WEB升级用的sysupgrade.bin（100%保留）
+          # 复制所有固件文件
           cp *sysupgrade.bin /home/runner/firmware/ 2>/dev/null
-
-          # 2. 强制生成UBI救砖文件（核心修复：即使没编译出独立UBI，也从sysupgrade提取）
-          SYSUPGRADE_BIN=$(ls *sysupgrade.bin | head -1)
-          if [ -n "$SYSUPGRADE_BIN" ]; then
-            # 从sysupgrade.bin中提取完整UBI镜像（IPQ807x标准偏移：4MB）
-            dd if="$SYSUPGRADE_BIN" of=/home/runner/firmware/redmi_ax6_mtd12_ubi.bin bs=1M skip=4
-            echo "✅ 成功提取UBI救砖文件：redmi_ax6_mtd12_ubi.bin"
+          cp *factory.ubi /home/runner/firmware/ 2>/dev/null
+          cp *rootfs.ubi /home/runner/firmware/ 2>/dev/null
+          
+          # 如果UBI文件未生成，手动创建
+          if [ ! -f /home/runner/firmware/*.ubi ]; then
+            SYSUPGRADE_BIN=$(ls *sysupgrade.bin | head -1)
+            if [ -n "$SYSUPGRADE_BIN" ]; then
+              # 从sysupgrade.bin提取UBI（256M Flash偏移为4MB）
+              dd if="$SYSUPGRADE_BIN" of=/home/runner/firmware/redmi_ax6_mtd12_ubi.bin bs=1M skip=4
+            fi
           fi
-
-          # 3. 发布所有文件到GitHub Release
-          gh release create "AX6-256M-${{ env.BUILD_TIME }}" /home/runner/firmware/* -R ${GITHUB_REPOSITORY} 2>/dev/null || true
+          
+          # 创建MD5校验文件
+          cd /home/runner/firmware
+          md5sum * > md5sum.txt
+          
+          # 发布到GitHub Release
+          gh release create "AX6-256M-${{ env.BUILD_TIME }}" ./* -R ${GITHUB_REPOSITORY} --notes "Redmi AX6 256M Flash固件" || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
