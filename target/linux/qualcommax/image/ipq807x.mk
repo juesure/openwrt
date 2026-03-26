@@ -392,14 +392,11 @@ define Device/redmi_ax6
 	$(call Device/xiaomi_ax3600)
 	DEVICE_VENDOR := Redmi
 	DEVICE_MODEL := AX6
-	# 256M Flash 配置
 	IMAGE_SIZE := 262144k
-	# UBI 优化参数
-	UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB
-	# 强制生成UBI镜像
+	UBINIZE_OPTS := -m 2048 -p 128KiB -s 2048 -O 2048 -E 5
 	IMAGES += factory.ubi
 	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
-	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 ubi-utils
+	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 ubi-utils mtd-utils
 endef
 define Device/spectrum_sax1v1k
 	$(call Device/FitImage)
