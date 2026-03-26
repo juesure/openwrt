@@ -19,10 +19,10 @@
 		label-mac-device = &dp2;
 	};
 
-	chosen {
-		stdout-path = "serial0:115200n8";
-		bootargs-append = " root=/dev/ubiblock0_0";
-	};
+    chosen {
+        stdout-path = "serial0:115200n8";
+        bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
+    };
 
 	keys {
 		compatible = "gpio-keys";
