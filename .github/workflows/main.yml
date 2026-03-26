@@ -61,6 +61,10 @@ jobs:
           make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
           echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
+          
+          # ===================== 生成可直接dd救砖的 UBI rootfs =====================
+          mkdir -p /home/runner/firmware
+          find bin/targets/qualcommax/ipq807x -name "*rootfs.ubi" -o -name "*rootfs.ubi.img" | head -1 | xargs -I {} cp {} /home/runner/firmware/redmi_ax6_mtd12_ubi.bin
 
       - name: Build & Package Firmware
         if: steps.compile.outputs.status == 'success'
