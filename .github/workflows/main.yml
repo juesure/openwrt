@@ -35,7 +35,12 @@ jobs:
             gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
             python3-distutils rsync unzip zlib1g-dev file wget libelf-dev \
             libfuse-dev device-tree-compiler mtd-utils squashfs-tools \
-            dosfstools parted kmod zip gh lz4 lzop
+            dosfstools parted kmod zip gh lz4 lzop \
+            m4  # ← 添加 m4
+          
+          # 确保 m4 可用
+          which m4 || sudo apt install -y m4
+          
           sudo timedatectl set-timezone "$TZ"
           mkdir -p "$WORK_DIR"
           chmod +x "$DIY_SCRIPT"
@@ -59,26 +64,37 @@ jobs:
           echo "CONFIG_MTD_UBI_FASTMAP=y" >> .config
           echo "CONFIG_MTD_UBI_BLOCK=y" >> .config
           make defconfig
-
+      - name: Prepare Toolchain
+        run: |
+          cd "$WORK_DIR/openwrt"
+          
+          # 先编译工具链
+          echo "准备编译工具链..."
+          make toolchain/compile -j$(nproc) 2>&1 | tee toolchain.log
+          
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ 工具链编译失败"
+            tail -100 toolchain.log
+            exit 1
+          fi
+          
+          echo "✅ 工具链准备完成"
       - name: Compile
         id: compile
         run: |
           cd "$WORK_DIR/openwrt"
           
+          # 确保工具链存在
+          export PATH=$PATH:$PWD/staging_dir/toolchain-aarch64_cortex-a53_gcc-*_musl/bin
+          
           echo "开始下载源码包..."
           make download -j$(nproc) 2>&1 | tee download.log
           
           echo "开始编译固件..."
-          # 先尝试编译目标/linux部分，查看详细错误
-          make target/linux/compile -j1 V=s 2>&1 | tee target_linux.log
+          # 清理之前的编译残留
+          make clean 2>/dev/null || true
           
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ target/linux 编译失败，错误信息："
-            tail -100 target_linux.log
-            exit 1
-          fi
-          
-          # 继续完整编译
+          # 使用单线程编译，输出详细日志
           make -j1 V=s 2>&1 | tee compile.log
           
           # 检查编译结果
@@ -87,12 +103,11 @@ jobs:
             echo "status=success" >> $GITHUB_OUTPUT
           else
             echo "❌ 固件编译失败"
-            echo "最后100行错误日志："
-            tail -100 compile.log
+            echo "最后200行错误日志："
+            tail -200 compile.log
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
-
       - name: Package & Release
         if: steps.compile.outputs.status == 'success'
         run: |
