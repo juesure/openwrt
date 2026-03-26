@@ -6,7 +6,7 @@
 #include "ipq8071-ax3600.dtsi"
 
 / {
-	model = "Redmi AX6 (256M)";
+	model = "Redmi AX6";
 	compatible = "redmi,ax6", "qcom,ipq8074";
 
 	leds {
