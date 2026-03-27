@@ -12,10 +12,148 @@ cd "${OPENWRT_ROOT}" || exit 1
 DTS_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/"
 mkdir -p "$DTS_DIR"
 
+# ========== 下载缺失的公共 DTSI 文件 ==========
+echo "下载公共 DTSI 文件..."
+
+# 下载 ipq8074-common.dtsi
+wget -q -O "${DTS_DIR}ipq8074-common.dtsi" \
+    "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-common.dtsi" 2>/dev/null || \
+    echo "⚠️ ipq8074-common.dtsi 下载失败，将创建简化版本"
+
+# 如果下载失败，创建简化版本
+if [ ! -f "${DTS_DIR}ipq8074-common.dtsi" ]; then
+    cat > "${DTS_DIR}ipq8074-common.dtsi" << 'EOF'
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/clock/qcom,gcc-ipq8074.h>
+#include <dt-bindings/reset/qcom,gcc-ipq8074.h>
+#include <dt-bindings/thermal/thermal.h>
+
+/ {
+	interrupt-parent = <&intc>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x0>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+		};
+
+		cpu@1 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x1>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+		};
+
+		cpu@2 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x2>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+		};
+
+		cpu@3 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x3>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+		};
+
+		L2_0: l2-cache {
+			compatible = "cache";
+			cache-level = <2>;
+		};
+	};
+
+	psci {
+		compatible = "arm,psci-1.0";
+		method = "smc";
+	};
+
+	soc: soc@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0 0 0 0xffffffff>;
+		compatible = "simple-bus";
+
+		intc: interrupt-controller@b000000 {
+			compatible = "qcom,msm-qgic2";
+			interrupt-controller;
+			#interrupt-cells = <3>;
+			reg = <0x0b000000 0x1000>,
+			      <0x0b002000 0x1000>;
+		};
+
+		timer@b120000 {
+			compatible = "arm,armv7-timer-mem";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges;
+			reg = <0x0b120000 0x1000>;
+			clock-frequency = <19200000>;
+
+			frame@b120000 {
+				frame-number = <0>;
+				interrupts = <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>,
+					     <GIC_SPI 7 IRQ_TYPE_LEVEL_HIGH>;
+				reg = <0x0b121000 0x1000>,
+				      <0x0b122000 0x1000>;
+			};
+		};
+
+		apcs_glb: mailbox@b111000 {
+			compatible = "qcom,ipq6018-apcs-apps-global";
+			reg = <0x0b111000 0x1000>;
+			#clock-cells = <1>;
+			clocks = <&xo>;
+			clock-names = "xo";
+		};
+	};
+
+	clocks {
+		xo: xo {
+			compatible = "fixed-clock";
+			clock-frequency = <19200000>;
+			#clock-cells = <0>;
+		};
+
+		sleep_clk: sleep_clk {
+			compatible = "fixed-clock";
+			clock-frequency = <32000>;
+			#clock-cells = <0>;
+		};
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <GIC_PPI 2 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 3 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 4 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 1 IRQ_TYPE_LEVEL_LOW>;
+	};
+};
+EOF
+fi
+
+# 下载 ipq8074-ess.dtsi
+wget -q -O "${DTS_DIR}ipq8074-ess.dtsi" \
+    "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-ess.dtsi"
+
 # ========== 创建 IPQ8071 专用的 DTSI 文件 ==========
 echo "创建 IPQ8071 专用 DTSI 文件..."
 
-# 1. 创建 ipq8071-512m.dtsi（基于 ipq8074 修改）
+# 1. 创建 ipq8071-512m.dtsi
 cat > "${DTS_DIR}ipq8071-512m.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
@@ -86,95 +224,23 @@ cat > "${DTS_DIR}ipq8071-ac-cpu.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
-/ {
-	cpus {
-		#address-cells = <1>;
-		#size-cells = <0>;
+#include <dt-bindings/thermal/thermal.h>
 
-		cpu@0 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x0>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-			clocks = <&apcs_glb>;
-			operating-points-v2 = <&cpu_opp_table>;
-			cpu-supply = <&apc_opp>;
-		};
+&cpu_opp_table {
+	/delete-node/ opp-2208000000;
+	/delete-node/ opp-1766400000;
+	/delete-node/ opp-1612800000;
+	/delete-node/ opp-1516800000;
 
-		cpu@1 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x1>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-			clocks = <&apcs_glb>;
-			operating-points-v2 = <&cpu_opp_table>;
-			cpu-supply = <&apc_opp>;
-		};
-
-		cpu@2 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x2>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-			clocks = <&apcs_glb>;
-			operating-points-v2 = <&cpu_opp_table>;
-			cpu-supply = <&apc_opp>;
-		};
-
-		cpu@3 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x3>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-			clocks = <&apcs_glb>;
-			operating-points-v2 = <&cpu_opp_table>;
-			cpu-supply = <&apc_opp>;
-		};
-
-		L2_0: l2-cache {
-			compatible = "cache";
-			cache-level = <2>;
-		};
-	};
-
-	cpu_opp_table: opp-table-cpu {
-		compatible = "operating-points-v2";
-		opp-shared;
-
-		opp-1017600000 {
-			opp-hz = <0 1017600000>;
-			opp-microvolt = <704000>;
-			clock-latency-ns = <200000>;
-		};
-		opp-1104000000 {
-			opp-hz = <0 1104000000>;
-			opp-microvolt = <752000>;
-			clock-latency-ns = <200000>;
-		};
-		opp-1200000000 {
-			opp-hz = <0 1200000000>;
-			opp-microvolt = <800000>;
-			clock-latency-ns = <200000>;
-		};
-		opp-1320000000 {
-			opp-hz = <0 1320000000>;
-			opp-microvolt = <856000>;
-			clock-latency-ns = <200000>;
-		};
-		opp-1401600000 {
-			opp-hz = <0 1401600000>;
-			opp-microvolt = <912000>;
-			clock-latency-ns = <200000>;
-		};
+	opp-1401600000 {
+		opp-hz = <0 1401600000>;
+		opp-microvolt = <912000>;
+		clock-latency-ns = <200000>;
 	};
 };
 EOF
 
-# 3. 修改 ipq8071-ax3600.dtsi，使用 IPQ8071 专用文件
+# 3. 创建 ipq8071-ax3600.dtsi
 cat > "${DTS_DIR}ipq8071-ax3600.dtsi" << 'DTSEOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
@@ -480,7 +546,7 @@ cat > "${DTS_DIR}ipq8071-ax6.dts" << 'DTSEOF'
 
 / {
 	model = "Redmi AX6";
-	compatible = "redmi,ax6", "qcom,ipq8071";
+	compatible = "redmi,ax6", "qcom,ipq8074";
 
 	leds {
 		compatible = "gpio-leds";
@@ -512,13 +578,14 @@ cat > "${DTS_DIR}ipq8071-ax6.dts" << 'DTSEOF'
 };
 DTSEOF
 
-# ========== 下载 common.mk ==========
+# ========== 下载 common.mk 并创建 ipq807x.mk ==========
+echo "创建 ipq807x.mk..."
 COMMON_MK_PATH="target/linux/qualcommax/image/common.mk"
 mkdir -p target/linux/qualcommax/image/
-wget -q -O "${COMMON_MK_PATH}" \
-    "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/image/common.mk"
 
-# ========== 创建 ipq807x.mk ==========
+wget -q -O "${COMMON_MK_PATH}" \
+    "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/image/common.mk" 2>/dev/null || true
+
 cat > target/linux/qualcommax/image/ipq807x.mk << 'MKEOF'
 # SPDX-License-Identifier: GPL-2.0-only
 #
@@ -633,5 +700,12 @@ start() {
 }
 EOF
 chmod +x files/etc/init.d/fix-wifi
+
+# ========== 验证文件 ==========
+echo "========== 验证创建的文件 =========="
+ls -la ${DTS_DIR}ipq8071*.dts* 2>/dev/null || echo "未找到 ipq8071 文件"
+ls -la ${DTS_DIR}ipq8074*.dtsi 2>/dev/null || echo "未找到 ipq8074 文件"
+ls -la target/linux/qualcommax/image/ipq807x.mk || echo "未找到 ipq807x.mk"
+ls -la target/linux/qualcommax/image/common.mk || echo "未找到 common.mk"
 
 echo "✅ DIY 脚本执行完成"
