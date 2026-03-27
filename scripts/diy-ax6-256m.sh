@@ -8,14 +8,13 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 恢复原始 ipq807x.mk ==========
-echo "恢复原始 ipq807x.mk..."
-git checkout target/linux/qualcommax/image/ipq807x.mk 2>/dev/null || true
+# ========== 确保 ipq807x.mk 文件存在且格式正确 ==========
+IPQ807X_MK="target/linux/qualcommax/image/ipq807x.mk"
+mkdir -p target/linux/qualcommax/image/
 
-# 如果 git checkout 失败，手动创建正确格式的文件
-if [ ! -f target/linux/qualcommax/image/ipq807x.mk ] || ! grep -q "include ./common.mk" target/linux/qualcommax/image/ipq807x.mk; then
-    echo "手动创建 ipq807x.mk..."
-    cat > target/linux/qualcommax/image/ipq807x.mk << 'MKEOF'
+echo "创建 ipq807x.mk..."
+
+cat > "${IPQ807X_MK}" << 'MKEOF'
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
@@ -114,15 +113,60 @@ define Device/redmi_ax6
 endef
 TARGET_DEVICES += redmi_ax6
 MKEOF
+
+# 验证文件是否创建成功
+if [ -f "${IPQ807X_MK}" ]; then
+    echo "✅ ipq807x.mk 创建成功"
+    # 显示前5行用于调试
+    echo "--- ipq807x.mk 前5行 ---"
+    head -5 "${IPQ807X_MK}"
+else
+    echo "❌ ipq807x.mk 创建失败"
+    exit 1
 fi
 
-# 验证文件格式
-if head -5 target/linux/qualcommax/image/ipq807x.mk | grep -q "^include ./common.mk$"; then
-    echo "✅ ipq807x.mk 格式正确"
-else
-    echo "❌ ipq807x.mk 格式错误，请检查第4行"
-    head -5 target/linux/qualcommax/image/ipq807x.mk
-    exit 1
+# ========== 创建 common.mk（如果不存在） ==========
+COMMON_MK="target/linux/qualcommax/image/common.mk"
+if [ ! -f "${COMMON_MK}" ]; then
+    echo "创建 common.mk..."
+    cat > "${COMMON_MK}" << 'CMKEOF'
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
+
+# Common build definitions for IPQ807x
+
+define Build/append-dtb
+	cat $(KDIR)/image-$(DEVICE_DTS).dtb >> $@
+endef
+
+define Build/append-rootfs
+	cat $(KDIR)/rootfs.$(1) >> $@
+endef
+
+define Build/append-ubi
+	cat $(KDIR)/rootfs.ubi >> $@
+endef
+
+define Build/check-size
+	@if [ $$(stat -c%s $@) -gt $(1) ]; then \
+		echo "Error: $@ exceeds $(1) bytes"; \
+		exit 1; \
+	fi
+endef
+
+define Build/qsdk-ipq-factory-nand
+	$(STAGING_DIR_HOST)/bin/mkfwimage2 -v -f 0x44000000 -p 0x44000000:0x200000:$(1) -p 0x44200000:0x200000:$(2) -o $@
+endef
+
+define Build/ubinize-kernel
+	mkdir -p $(KDIR)/tmp
+	$(STAGING_DIR_HOST)/bin/ubinize -o $@ -p 128KiB -m 2048 -s 2048 -O 2048 \
+		$(foreach vol,$(1),-v $(vol)) \
+		$(KDIR)/tmp/ubinize.cfg
+endef
+CMKEOF
+    echo "✅ common.mk 创建成功"
 fi
 
 # ========== 清理联发科 ==========
