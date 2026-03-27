@@ -22,6 +22,8 @@ cat > .config << EOF
 CONFIG_TARGET_qualcommax=y
 CONFIG_TARGET_qualcommax_ipq807x=y
 CONFIG_TARGET_qualcommax_ipq807x_DEVICE_redmi_ax6=y
+CONFIG_TARGET_MULTI_PROFILE=n
+CONFIG_TARGET_ALL_PROFILES=n
 CONFIG_TARGET_mediatek=n
 CONFIG_TARGET_mediatek_filogic=n
 EOF
@@ -65,4 +67,4 @@ chmod +x files/etc/init.d/fix-wifi
 # ========== 重新生成配置 ==========
 make defconfig 2>/dev/null || true
 
-echo "✅ DIY 脚本执行完成 —— 已适配256M Flash，包含 WiFi 固件修复"
+echo "✅ DIY 脚本执行完成 —— 已适配256M Flash，包含 WiFi 固件修复和 iStore"
