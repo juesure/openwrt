@@ -1,21 +1,170 @@
-      - name: Create Release Notes
-        run: |
-          cat > /home/runner/RELEASE_NOTES.md << 'EOF'
-## 固件说明
-- 适配256MB Flash
-- 包含LuCI中文界面
-- UBI坏块管理优化
+name: Build Redmi AX6 (256M)
 
-## 刷写方法
-TTL执行: tftpboot 0x44000000 redmi_ax6_mtd12_ubi.bin; nand erase 0xa00000 0xf000000; nand write 0x44000000 0xa00000 0xf000000; reset
-EOF
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  REPO_URL: https://github.com/juesure/openwrt/
+  REPO_BRANCH: 256M_FLASH_NOBAD_BLOCK
+  DIY_SCRIPT: /home/runner/work/openwrt/openwrt/scripts/diy-ax6-256m.sh
+  CONFIG_FILE: /home/runner/work/openwrt/openwrt/config/ax6-256m.config
+  TZ: Asia/Shanghai
+  WORK_DIR: /home/runner/work/openwrt/openwrt/workdir
+  FIRMWARE_OUTPUT_DIR: /home/runner/work/openwrt/openwrt/workdir/openwrt/bin/targets/qualcommax/ipq807x
+
+on:
+  push:
+    branches:
+      - 256M_FLASH_NOBAD_BLOCK
+  workflow_dispatch: null
+
+jobs:
+  build-ax6-firmware:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4.2.0
+        with:
+          path: /home/runner/work/openwrt/openwrt
+          fetch-depth: 1
+
+      - name: Initialize Env
+        run: |
+          sudo apt update -y
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+            python3-distutils rsync unzip zlib1g-dev file wget libelf-dev \
+            libfuse-dev device-tree-compiler mtd-utils squashfs-tools \
+            dosfstools parted kmod zip gh lz4 lzop m4 \
+            python3-yaml python3-jsonschema
+          
+          sudo timedatectl set-timezone "$TZ"
+          mkdir -p "$WORK_DIR"
+          chmod +x "$DIY_SCRIPT"
+
+      - name: Clean Workdir
+        run: |
+          rm -rf "$WORK_DIR"
+          mkdir -p "$WORK_DIR"
+
+      - name: Clone Source
+        run: |
+          cd "$WORK_DIR"
+          git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt
+
+      - name: Preprocess
+        run: |
+          cd "$WORK_DIR/openwrt"
+          "$DIY_SCRIPT"
+          cp "$CONFIG_FILE" .config
+          echo "CONFIG_MTD_UBI_FASTMAP=y" >> .config
+          echo "CONFIG_MTD_UBI_BLOCK=y" >> .config
+          echo "CONFIG_TARGET_qualcommax_ipq807x=y" >> .config
+          echo "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_redmi_ax6=y" >> .config
+          make defconfig
+
+      - name: Prepare Toolchain
+        run: |
+          cd "$WORK_DIR/openwrt"
+          echo "准备编译工具链..."
+          make toolchain/compile -j$(nproc) 2>&1 | tee toolchain.log
+          
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ 工具链编译失败"
+            tail -100 toolchain.log
+            exit 1
+          fi
+          
+          echo "✅ 工具链准备完成"
+
+      - name: Compile
+        id: compile
+        run: |
+          cd "$WORK_DIR/openwrt"
+          
+          echo "开始下载源码包..."
+          make download -j$(nproc) 2>&1 | tee download.log
+          
+          echo "开始编译固件..."
+          make -j$(nproc) V=s 2>&1 | tee compile.log
+          
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ 编译失败"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
+          
+          echo "=========================================="
+          echo "检查固件目录: $FIRMWARE_DIR"
+          echo "=========================================="
+          
+          ls -la "$FIRMWARE_DIR" || echo "目录不存在"
+          
+          SYSUPGRADE_FILE=$(find "$FIRMWARE_DIR" -name "*redmi_ax6*sysupgrade.bin" -type f | head -1)
+          
+          if [ -n "$SYSUPGRADE_FILE" ] && [ -f "$SYSUPGRADE_FILE" ]; then
+            echo "✅ 找到固件文件: $SYSUPGRADE_FILE"
+            echo "文件大小: $(stat -c%s "$SYSUPGRADE_FILE") bytes"
+            echo "status=success" >> $GITHUB_OUTPUT
+            
+            cd "$FIRMWARE_DIR"
+            sha256sum *redmi_ax6*.bin > sha256sums
+            md5sum *redmi_ax6*.bin > md5sums
+            echo "✅ 校验和文件已生成"
+            
+            echo "=========================================="
+            echo "生成的文件："
+            ls -lh *redmi_ax6*
+            echo "=========================================="
+          else
+            echo "❌ 未找到固件文件"
+            echo "目录内容："
+            ls -la "$FIRMWARE_DIR"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
       - name: Package & Release
-        # ... 其他配置 ...
+        if: steps.compile.outputs.status == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # ... 复制文件 ...
+          mkdir -p /home/runner/firmware
+          cd "$FIRMWARE_OUTPUT_DIR"
+          
+          cp *redmi_ax6*sysupgrade.bin /home/runner/firmware/ 2>/dev/null || true
+          cp *redmi_ax6*factory.ubi /home/runner/firmware/ 2>/dev/null || true
+          cp *redmi_ax6*rootfs.ubi /home/runner/firmware/ 2>/dev/null || true
+          
+          if ls /home/runner/firmware/*.ubi 1>/dev/null 2>&1; then
+            FIRST_UBI=$(ls /home/runner/firmware/*.ubi | head -1)
+            cp "$FIRST_UBI" /home/runner/firmware/redmi_ax6_mtd12_ubi.bin
+            echo "✅ 生成 redmi_ax6_mtd12_ubi.bin"
+          fi
+          
+          cd /home/runner/firmware
+          md5sum * > md5sum.txt
+          
+          echo "待发布的文件："
+          ls -lh
+          
+          BUILD_TIME=$(date +%Y%m%d_%H%M)
+          RELEASE_TAG="AX6-256M-$BUILD_TIME"
+          
           gh release create "$RELEASE_TAG" ./* \
             -R ${GITHUB_REPOSITORY} \
             --title "Redmi AX6 256M Flash 固件 $BUILD_TIME" \
-            --notes-file /home/runner/RELEASE_NOTES.md \
+            --notes "适配256MB Flash的OpenWrt固件，包含LuCI中文界面。刷写方法: TTL执行 tftpboot 0x44000000 redmi_ax6_mtd12_ubi.bin; nand erase 0xa00000 0xf000000; nand write 0x44000000 0xa00000 0xf000000; reset" \
             || echo "Release创建失败"
+          
+          echo "Release创建完成: $RELEASE_TAG"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AX6-256M-Firmware-${{ github.run_number }}
+          path: /home/runner/firmware/*
+          retention-days: 30
