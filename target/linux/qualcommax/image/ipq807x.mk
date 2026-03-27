@@ -1,36 +1,3 @@
-#!/bin/bash
-OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
-
-if [ ! -d "${OPENWRT_ROOT}" ]; then
-  echo "❌ 错误：目录不存在"
-  exit 1
-fi
-
-cd "${OPENWRT_ROOT}" || exit 1
-
-# ========== 清理联发科 ==========
-if [ -f ".config" ]; then
-  sed -i '/mt76/d' .config
-  sed -i '/mediatek/d' .config
-fi
-
-rm -rf package/kernel/mt76
-./scripts/feeds uninstall -a mt76 2>/dev/null || true
-
-# ========== 锁定平台 ==========
-cat > .config << EOF
-CONFIG_TARGET_qualcommax=y
-CONFIG_TARGET_qualcommax_ipq807x=y
-CONFIG_TARGET_qualcommax_ipq807x_DEVICE_redmi_ax6=y
-CONFIG_TARGET_MULTI_PROFILE=n
-CONFIG_TARGET_ALL_PROFILES=n
-CONFIG_TARGET_mediatek=n
-CONFIG_TARGET_mediatek_filogic=n
-EOF
-
-# ========== 替换 ipq807x.mk 为精简版（修正 common.mk 路径） ==========
-IPQ807X_MK="target/linux/qualcommax/image/ipq807x.mk"
-cat > ${IPQ807X_MK} << 'MKEOF'
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
@@ -128,28 +95,3 @@ define Device/redmi_ax6
 		store-apps
 endef
 TARGET_DEVICES += redmi_ax6
-MKEOF
-
-# ========== 添加 WiFi 固件修复脚本 ==========
-mkdir -p files/etc/init.d
-cat > files/etc/init.d/fix-wifi << 'EOF'
-#!/bin/sh /etc/rc.common
-
-START=98
-
-start() {
-    # 修复 WiFi 固件路径
-    if [ -d /lib/firmware/ath11k/IPQ8074/hw2.0 ] && [ ! -f /lib/firmware/ath11k/IPQ8074/q6_fw.mdt ]; then
-        echo "修复 WiFi 固件路径..."
-        cd /lib/firmware/ath11k/IPQ8074/
-        ln -sf hw2.0/* . 2>/dev/null
-        echo "WiFi 固件修复完成"
-    fi
-}
-EOF
-chmod +x files/etc/init.d/fix-wifi
-
-# ========== 重新生成配置 ==========
-make defconfig 2>/dev/null || true
-
-echo "✅ DIY 脚本执行完成 —— 已适配256M Flash，包含 WiFi 固件修复和 iStore"
