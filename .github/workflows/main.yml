@@ -92,26 +92,38 @@ jobs:
             exit 1
           fi
           
-          # 生成校验和
-          echo "生成校验和..."
-          cd bin/targets/qualcommax/ipq807x/
-          if ls *sysupgrade.bin 1> /dev/null 2>&1; then
+          # 直接检查固件文件（不生成校验和）
+          FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
+          
+          echo "=========================================="
+          echo "检查固件目录: $FIRMWARE_DIR"
+          echo "=========================================="
+          
+          # 显示目录内容
+          ls -la "$FIRMWARE_DIR" || echo "目录不存在"
+          
+          # 查找 sysupgrade.bin 文件
+          SYSUPGRADE_FILE=$(find "$FIRMWARE_DIR" -name "*sysupgrade.bin" -type f | head -1)
+          
+          if [ -n "$SYSUPGRADE_FILE" ] && [ -f "$SYSUPGRADE_FILE" ]; then
+            echo "✅ 找到固件文件: $SYSUPGRADE_FILE"
+            echo "文件大小: $(stat -c%s "$SYSUPGRADE_FILE") bytes"
+            echo "status=success" >> $GITHUB_OUTPUT
+            
+            # 生成校验和
+            cd "$FIRMWARE_DIR"
             sha256sum *sysupgrade.bin > sha256sums
             md5sum *sysupgrade.bin > md5sums
             echo "✅ 校验和文件已生成"
-          fi
-          cd ../../../../../
-          
-          # 检查结果
-          if ls bin/targets/qualcommax/ipq807x/*sysupgrade.bin 1> /dev/null 2>&1; then
-            echo "✅ 固件编译成功"
-            echo "status=success" >> $GITHUB_OUTPUT
             
+            # 显示固件信息
             echo "=========================================="
             echo "生成的文件："
-            ls -lh bin/targets/qualcommax/ipq807x/
+            ls -lh
+            echo "=========================================="
           else
             echo "❌ 未找到固件文件"
+            echo "在 $FIRMWARE_DIR 中查找失败"
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
@@ -224,9 +236,10 @@ jobs:
           RELEASE_TAG="AX6-256M-$BUILD_TIME"
           
           # 创建 Release
+          cd /home/runner/firmware
           gh release create "$RELEASE_TAG" \
             --title "Redmi AX6 256M Firmware $BUILD_TIME" \
             --notes "自动编译的 Redmi AX6 256M 固件" \
-            /home/runner/firmware/* || true
+            * || true
           
           echo "✅ Release 已创建: $RELEASE_TAG"
