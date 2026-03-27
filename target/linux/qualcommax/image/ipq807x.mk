@@ -389,12 +389,19 @@ define Device/qnap_301w
 endef
 TARGET_DEVICES += qnap_301w
 define Device/redmi_ax6
-    $(call Device/xiaomi_ax3600)
-    DEVICE_VENDOR := Redmi
-    DEVICE_MODEL := AX6
-    IMAGE_SIZE := 245760k  # 240MB
-    DEVICE_PACKAGES := ipq-wifi-redmi_ax6
+	$(call Device/xiaomi_ax3600)
+	DEVICE_VENDOR := Redmi
+	DEVICE_MODEL := AX6
+	IMAGE_SIZE := 245760k
+	# 关键：确保内核在 UBI 中
+	KERNEL_IN_UBI := 1
+	# UBI 参数
+	UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB -s 2048 -O 2048
+	IMAGES += factory.ubi
+	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
+	DEVICE_PACKAGES := ipq-wifi-redmi_ax6
 endef
+TARGET_DEVICES += redmi_ax6
 define Device/spectrum_sax1v1k
 	$(call Device/FitImage)
 	$(call Device/EmmcImage)
