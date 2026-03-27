@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
-#include "ipq8074-512m.dtsi"
-#include "ipq8074-ac-cpu.dtsi"
+#include "ipq8071.dtsi"
+#include "ipq8071-ac-cpu.dtsi"
 #include "ipq8074-ess.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
@@ -179,6 +179,7 @@
 				reg = <0x980000 0x80000>;
 			};
 
+			/* rootfs 分区 - 240MB */
 			partition@a00000 {
 				label = "rootfs";
 				reg = <0xa00000 0xf000000>;
