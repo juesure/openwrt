@@ -8,90 +8,179 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 下载缺失的 DTSI 文件 ==========
+# ========== 设置正确的 DTS 目录 ==========
 DTS_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/"
 mkdir -p "$DTS_DIR"
 
-# 下载 ipq8074-512m.dtsi
-if [ ! -f "${DTS_DIR}ipq8074-512m.dtsi" ]; then
-    echo "下载 ipq8074-512m.dtsi..."
-    wget -q -O "${DTS_DIR}ipq8074-512m.dtsi" \
-        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-512m.dtsi"
-fi
+# ========== 创建 IPQ8071 专用的 DTSI 文件 ==========
+echo "创建 IPQ8071 专用 DTSI 文件..."
 
-# 下载 ipq8074-ac-cpu.dtsi
-if [ ! -f "${DTS_DIR}ipq8074-ac-cpu.dtsi" ]; then
-    echo "下载 ipq8074-ac-cpu.dtsi..."
-    wget -q -O "${DTS_DIR}ipq8074-ac-cpu.dtsi" \
-        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-ac-cpu.dtsi"
-fi
-
-# 下载 ipq8074-ess.dtsi
-if [ ! -f "${DTS_DIR}ipq8074-ess.dtsi" ]; then
-    echo "下载 ipq8074-ess.dtsi..."
-    wget -q -O "${DTS_DIR}ipq8074-ess.dtsi" \
-        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-ess.dtsi"
-fi
-
-# 下载 ipq8074-cpr-regulator.dtsi
-if [ ! -f "${DTS_DIR}ipq8074-cpr-regulator.dtsi" ]; then
-    echo "下载 ipq8074-cpr-regulator.dtsi..."
-    wget -q -O "${DTS_DIR}ipq8074-cpr-regulator.dtsi" \
-        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-cpr-regulator.dtsi"
-fi
-
-echo "✅ DTSI 文件下载完成"
-
-# ========== 创建 ipq8071-ax6.dts ==========
-cat > "${DTS_DIR}ipq8071-ax6.dts" << 'DTSEOF'
+# 1. 创建 ipq8071-512m.dtsi（基于 ipq8074 修改）
+cat > "${DTS_DIR}ipq8071-512m.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-/* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
+/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
-/dts-v1/;
-
-#include "ipq8071-ax3600.dtsi"
+#include "ipq8074-common.dtsi"
 
 / {
-	model = "Redmi AX6";
-	compatible = "redmi,ax6", "qcom,ipq8074";
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0x0 0x40000000 0x0 0x20000000>;
+	};
 
-	leds {
-		compatible = "gpio-leds";
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
 
-		led_system_blue: system-blue {
-			label = "blue:system";
-			gpios = <&tlmm 21 GPIO_ACTIVE_HIGH>;
+		nss_reserved: nss@40000000 {
+			reg = <0x0 0x40000000 0x0 0x1000000>;
+			no-map;
 		};
 
-		led_system_yellow: system-yellow {
-			label = "yellow:system";
-			gpios = <&tlmm 22 GPIO_ACTIVE_HIGH>;
+		tzapp: tzapp@4a400000 {
+			reg = <0x0 0x4a400000 0x0 0x100000>;
+			no-map;
 		};
 
-		network-blue {
-			label = "blue:network";
-			gpios = <&tlmm 42 GPIO_ACTIVE_HIGH>;
+		bootloader: bootloader@4a600000 {
+			reg = <0x0 0x4a600000 0x0 0x400000>;
+			no-map;
 		};
 
-		network-yellow {
-			label = "yellow:network";
-			gpios = <&tlmm 43 GPIO_ACTIVE_HIGH>;
+		sbl: sbl@4aa00000 {
+			reg = <0x0 0x4aa00000 0x0 0x100000>;
+			no-map;
+		};
+
+		smem: smem@4ab00000 {
+			reg = <0x0 0x4ab00000 0x0 0x100000>;
+			no-map;
+		};
+
+		memory@4ac00000 {
+			reg = <0x0 0x4ac00000 0x0 0x400000>;
+			no-map;
+		};
+
+		wcnss: wcnss@4b000000 {
+			reg = <0x0 0x4b000000 0x0 0x3700000>;
+			no-map;
+		};
+
+		q6_etr_dump: q6_etr_dump@50f00000 {
+			reg = <0x0 0x4e700000 0x0 0x100000>;
+			no-map;
+		};
+
+		m3_dump: m3_dump@51000000 {
+			reg = <0x0 0x4e800000 0x0 0x100000>;
+			no-map;
 		};
 	};
 };
+EOF
 
-&wifi {
-	qcom,ath11k-calibration-variant = "Redmi-AX6";
+# 2. 创建 ipq8071-ac-cpu.dtsi
+cat > "${DTS_DIR}ipq8071-ac-cpu.dtsi" << 'EOF'
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
+
+/ {
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x0>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+			clocks = <&apcs_glb>;
+			operating-points-v2 = <&cpu_opp_table>;
+			cpu-supply = <&apc_opp>;
+		};
+
+		cpu@1 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x1>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+			clocks = <&apcs_glb>;
+			operating-points-v2 = <&cpu_opp_table>;
+			cpu-supply = <&apc_opp>;
+		};
+
+		cpu@2 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x2>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+			clocks = <&apcs_glb>;
+			operating-points-v2 = <&cpu_opp_table>;
+			cpu-supply = <&apc_opp>;
+		};
+
+		cpu@3 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x3>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+			clocks = <&apcs_glb>;
+			operating-points-v2 = <&cpu_opp_table>;
+			cpu-supply = <&apc_opp>;
+		};
+
+		L2_0: l2-cache {
+			compatible = "cache";
+			cache-level = <2>;
+		};
+	};
+
+	cpu_opp_table: opp-table-cpu {
+		compatible = "operating-points-v2";
+		opp-shared;
+
+		opp-1017600000 {
+			opp-hz = <0 1017600000>;
+			opp-microvolt = <704000>;
+			clock-latency-ns = <200000>;
+		};
+		opp-1104000000 {
+			opp-hz = <0 1104000000>;
+			opp-microvolt = <752000>;
+			clock-latency-ns = <200000>;
+		};
+		opp-1200000000 {
+			opp-hz = <0 1200000000>;
+			opp-microvolt = <800000>;
+			clock-latency-ns = <200000>;
+		};
+		opp-1320000000 {
+			opp-hz = <0 1320000000>;
+			opp-microvolt = <856000>;
+			clock-latency-ns = <200000>;
+		};
+		opp-1401600000 {
+			opp-hz = <0 1401600000>;
+			opp-microvolt = <912000>;
+			clock-latency-ns = <200000>;
+		};
+	};
 };
-DTSEOF
+EOF
 
-# ========== 创建 ipq8071-ax3600.dtsi ==========
+# 3. 修改 ipq8071-ax3600.dtsi，使用 IPQ8071 专用文件
 cat > "${DTS_DIR}ipq8071-ax3600.dtsi" << 'DTSEOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
-#include "ipq8074-512m.dtsi"
-#include "ipq8074-ac-cpu.dtsi"
+#include "ipq8071-512m.dtsi"
+#include "ipq8071-ac-cpu.dtsi"
 #include "ipq8074-ess.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
@@ -380,13 +469,54 @@ cat > "${DTS_DIR}ipq8071-ax3600.dtsi" << 'DTSEOF'
 };
 DTSEOF
 
+# 4. 创建 ipq8071-ax6.dts
+cat > "${DTS_DIR}ipq8071-ax6.dts" << 'DTSEOF'
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
+
+/dts-v1/;
+
+#include "ipq8071-ax3600.dtsi"
+
+/ {
+	model = "Redmi AX6";
+	compatible = "redmi,ax6", "qcom,ipq8071";
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_system_blue: system-blue {
+			label = "blue:system";
+			gpios = <&tlmm 21 GPIO_ACTIVE_HIGH>;
+		};
+
+		led_system_yellow: system-yellow {
+			label = "yellow:system";
+			gpios = <&tlmm 22 GPIO_ACTIVE_HIGH>;
+		};
+
+		network-blue {
+			label = "blue:network";
+			gpios = <&tlmm 42 GPIO_ACTIVE_HIGH>;
+		};
+
+		network-yellow {
+			label = "yellow:network";
+			gpios = <&tlmm 43 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&wifi {
+	qcom,ath11k-calibration-variant = "Redmi-AX6";
+};
+DTSEOF
+
 # ========== 下载 common.mk ==========
 COMMON_MK_PATH="target/linux/qualcommax/image/common.mk"
 mkdir -p target/linux/qualcommax/image/
-if [ ! -f "${COMMON_MK_PATH}" ]; then
-    wget -q -O "${COMMON_MK_PATH}" \
-        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/image/common.mk"
-fi
+wget -q -O "${COMMON_MK_PATH}" \
+    "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/image/common.mk"
 
 # ========== 创建 ipq807x.mk ==========
 cat > target/linux/qualcommax/image/ipq807x.mk << 'MKEOF'
