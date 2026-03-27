@@ -92,7 +92,7 @@ jobs:
             exit 1
           fi
           
-          # 直接检查固件文件（不生成校验和）
+          # 直接检查固件文件
           FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
           
           echo "=========================================="
@@ -127,7 +127,8 @@ jobs:
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
-       - name: Package & Release
+
+      - name: Package & Release
         if: steps.compile.outputs.status == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -154,7 +155,7 @@ jobs:
           echo "待发布的文件："
           ls -lh
           
-          # 创建 Release（使用单行 notes 避免语法错误）
+          # 创建 Release
           BUILD_TIME=$(date +%Y%m%d_%H%M)
           RELEASE_TAG="AX6-256M-$BUILD_TIME"
           
@@ -165,3 +166,10 @@ jobs:
             || echo "Release创建失败"
           
           echo "Release创建完成: $RELEASE_TAG"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AX6-256M-Firmware-${{ github.run_number }}
+          path: /home/runner/firmware/*
+          retention-days: 30
