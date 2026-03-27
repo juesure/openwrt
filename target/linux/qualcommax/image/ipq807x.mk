@@ -393,15 +393,15 @@ define Device/redmi_ax6
 	DEVICE_VENDOR := Redmi
 	DEVICE_MODEL := AX6
 	IMAGE_SIZE := 245760k
-	# 关键：确保内核在 UBI 中
-	KERNEL_IN_UBI := 1
-	# UBI 参数
+	# 关键：确保生成完整的 UBI 卷
 	UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB -s 2048 -O 2048
+	# 确保生成所有卷
+	KERNEL_IN_UBI := 1
+	UBI_ROOTFS := 1
 	IMAGES += factory.ubi
 	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
 	DEVICE_PACKAGES := ipq-wifi-redmi_ax6
 endef
-TARGET_DEVICES += redmi_ax6
 define Device/spectrum_sax1v1k
 	$(call Device/FitImage)
 	$(call Device/EmmcImage)
