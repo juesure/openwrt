@@ -294,4 +294,18 @@
 
 &wifi {
 	status = "okay";
+	
+	// 添加启动脚本修复固件路径
+	post-init = <&fix_wifi_firmware>;
+};
+
+/ {
+	fix_wifi_firmware: fix-wifi-firmware {
+		compatible = "openwrt,post-init";
+		script = "
+			if [ -d /lib/firmware/ath11k/IPQ8074/hw2.0 ] && [ ! -f /lib/firmware/ath11k/IPQ8074/q6_fw.mdt ]; then
+				ln -sf hw2.0/* /lib/firmware/ath11k/IPQ8074/ 2>/dev/null
+			fi
+		";
+	};
 };
