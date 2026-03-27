@@ -8,22 +8,387 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 下载缺失的 common.mk ==========
-COMMON_MK_PATH="target/linux/qualcommax/image/common.mk"
-if [ ! -f "${COMMON_MK_PATH}" ]; then
-    echo "⚠️ common.mk 不存在，正在从官方仓库下载..."
-    mkdir -p target/linux/qualcommax/image/
-    wget -q -O "${COMMON_MK_PATH}" \
-        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/image/common.mk"
-    
-    if [ ! -f "${COMMON_MK_PATH}" ]; then
-        echo "❌ 下载失败"
-        exit 1
-    fi
-    echo "✅ common.mk 下载成功"
+# ========== 下载缺失的 DTSI 文件 ==========
+DTS_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/"
+mkdir -p "$DTS_DIR"
+
+# 下载 ipq8074-512m.dtsi
+if [ ! -f "${DTS_DIR}ipq8074-512m.dtsi" ]; then
+    echo "下载 ipq8074-512m.dtsi..."
+    wget -q -O "${DTS_DIR}ipq8074-512m.dtsi" \
+        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-512m.dtsi"
 fi
 
-# ========== 创建 ipq807x.mk（只包含 Redmi AX6） ==========
+# 下载 ipq8074-ac-cpu.dtsi
+if [ ! -f "${DTS_DIR}ipq8074-ac-cpu.dtsi" ]; then
+    echo "下载 ipq8074-ac-cpu.dtsi..."
+    wget -q -O "${DTS_DIR}ipq8074-ac-cpu.dtsi" \
+        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-ac-cpu.dtsi"
+fi
+
+# 下载 ipq8074-ess.dtsi
+if [ ! -f "${DTS_DIR}ipq8074-ess.dtsi" ]; then
+    echo "下载 ipq8074-ess.dtsi..."
+    wget -q -O "${DTS_DIR}ipq8074-ess.dtsi" \
+        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-ess.dtsi"
+fi
+
+# 下载 ipq8074-cpr-regulator.dtsi
+if [ ! -f "${DTS_DIR}ipq8074-cpr-regulator.dtsi" ]; then
+    echo "下载 ipq8074-cpr-regulator.dtsi..."
+    wget -q -O "${DTS_DIR}ipq8074-cpr-regulator.dtsi" \
+        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-cpr-regulator.dtsi"
+fi
+
+echo "✅ DTSI 文件下载完成"
+
+# ========== 创建 ipq8071-ax6.dts ==========
+cat > "${DTS_DIR}ipq8071-ax6.dts" << 'DTSEOF'
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
+
+/dts-v1/;
+
+#include "ipq8071-ax3600.dtsi"
+
+/ {
+	model = "Redmi AX6";
+	compatible = "redmi,ax6", "qcom,ipq8074";
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_system_blue: system-blue {
+			label = "blue:system";
+			gpios = <&tlmm 21 GPIO_ACTIVE_HIGH>;
+		};
+
+		led_system_yellow: system-yellow {
+			label = "yellow:system";
+			gpios = <&tlmm 22 GPIO_ACTIVE_HIGH>;
+		};
+
+		network-blue {
+			label = "blue:network";
+			gpios = <&tlmm 42 GPIO_ACTIVE_HIGH>;
+		};
+
+		network-yellow {
+			label = "yellow:network";
+			gpios = <&tlmm 43 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&wifi {
+	qcom,ath11k-calibration-variant = "Redmi-AX6";
+};
+DTSEOF
+
+# ========== 创建 ipq8071-ax3600.dtsi ==========
+cat > "${DTS_DIR}ipq8071-ax3600.dtsi" << 'DTSEOF'
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
+
+#include "ipq8074-512m.dtsi"
+#include "ipq8074-ac-cpu.dtsi"
+#include "ipq8074-ess.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+/ {
+	aliases {
+		serial0 = &blsp1_uart5;
+		led-boot = &led_system_yellow;
+		led-failsafe = &led_system_yellow;
+		led-running = &led_system_blue;
+		led-upgrade = &led_system_yellow;
+		label-mac-device = &dp2;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+		bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
+	};
+
+	keys {
+		compatible = "gpio-keys";
+
+		reset {
+			label = "reset";
+			gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESTART>;
+		};
+	};
+};
+
+&blsp1_uart5 {
+	status = "okay";
+};
+
+&prng {
+	status = "okay";
+};
+
+&cryptobam {
+	status = "okay";
+};
+
+&crypto {
+	status = "okay";
+};
+
+&qpic_bam {
+	status = "okay";
+};
+
+&tlmm {
+	mdio_pins: mdio-pins {
+		mdc {
+			pins = "gpio68";
+			function = "mdc";
+			drive-strength = <8>;
+			bias-pull-up;
+		};
+
+		mdio {
+			pins = "gpio69";
+			function = "mdio";
+			drive-strength = <8>;
+			bias-pull-up;
+		};
+	};
+};
+
+&qpic_nand {
+	status = "okay";
+
+	nand@0 {
+		reg = <0>;
+		nand-ecc-strength = <4>;
+		nand-ecc-step-size = <512>;
+		nand-bus-width = <8>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "0:sbl1";
+				reg = <0x0 0x100000>;
+				read-only;
+			};
+
+			partition@100000 {
+				label = "0:mibib";
+				reg = <0x100000 0x100000>;
+				read-only;
+			};
+
+			partition@200000 {
+				label = "0:qsee";
+				reg = <0x200000 0x300000>;
+				read-only;
+			};
+
+			partition@500000 {
+				label = "0:devcfg";
+				reg = <0x500000 0x80000>;
+				read-only;
+			};
+
+			partition@580000 {
+				label = "0:rpm";
+				reg = <0x580000 0x80000>;
+				read-only;
+			};
+
+			partition@600000 {
+				label = "0:cdt";
+				reg = <0x600000 0x80000>;
+				read-only;
+			};
+
+			partition@680000 {
+				label = "0:appsblenv";
+				reg = <0x680000 0x80000>;
+			};
+
+			partition@700000 {
+				label = "0:appsbl";
+				reg = <0x700000 0x100000>;
+				read-only;
+			};
+
+			partition@800000 {
+				label = "0:art";
+				reg = <0x800000 0x80000>;
+				read-only;
+
+				nvmem-layout {
+					compatible = "fixed-layout";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					macaddr_dp2: macaddr@6 {
+						reg = <0x6 0x6>;
+					};
+
+					macaddr_dp3: macaddr@c {
+						reg = <0xc 0x6>;
+					};
+
+					macaddr_dp4: macaddr@12 {
+						reg = <0x12 0x6>;
+					};
+
+					macaddr_dp5: macaddr@18 {
+						reg = <0x18 0x6>;
+					};
+				};
+			};
+
+			partition@880000 {
+				label = "bdata";
+				reg = <0x880000 0x80000>;
+			};
+
+			partition@900000 {
+				label = "crash";
+				reg = <0x900000 0x80000>;
+			};
+
+			partition@980000 {
+				label = "crash_syslog";
+				reg = <0x980000 0x80000>;
+			};
+
+			partition@a00000 {
+				label = "rootfs";
+				reg = <0xa00000 0xf000000>;
+				compatible = "openwrt,ubi";
+			};
+
+			partition@fa00000 {
+				label = "rsvd0";
+				reg = <0xfa00000 0x80000>;
+				read-only;
+			};
+		};
+	};
+};
+
+&mdio {
+	status = "okay";
+	pinctrl-0 = <&mdio_pins>;
+	pinctrl-names = "default";
+	reset-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
+
+	ethernet-phy-package@0 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "qcom,qca8075-package";
+		reg = <0>;
+
+		qca8075_1: ethernet-phy@1 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <1>;
+		};
+
+		qca8075_2: ethernet-phy@2 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <2>;
+		};
+
+		qca8075_3: ethernet-phy@3 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <3>;
+		};
+
+		qca8075_4: ethernet-phy@4 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <4>;
+		};
+	};
+};
+
+&switch {
+	status = "okay";
+	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>;
+	switch_wan_bmp = <ESS_PORT2>;
+	switch_mac_mode = <MAC_MODE_PSGMII>;
+
+	qcom,port_phyinfo {
+		port@2 {
+			port_id = <2>;
+			phy_address = <1>;
+		};
+		port@3 {
+			port_id = <3>;
+			phy_address = <2>;
+		};
+		port@4 {
+			port_id = <4>;
+			phy_address = <3>;
+		};
+		port@5 {
+			port_id = <5>;
+			phy_address = <4>;
+		};
+	};
+};
+
+&edma {
+	status = "okay";
+};
+
+&dp2 {
+	status = "okay";
+	phy-handle = <&qca8075_1>;
+	label = "wan";
+	nvmem-cells = <&macaddr_dp2>;
+	nvmem-cell-names = "mac-address";
+};
+
+&dp3 {
+	status = "okay";
+	phy-handle = <&qca8075_2>;
+	label = "lan1";
+	nvmem-cells = <&macaddr_dp3>;
+	nvmem-cell-names = "mac-address";
+};
+
+&dp4 {
+	status = "okay";
+	phy-handle = <&qca8075_3>;
+	label = "lan2";
+	nvmem-cells = <&macaddr_dp4>;
+	nvmem-cell-names = "mac-address";
+};
+
+&dp5 {
+	status = "okay";
+	phy-handle = <&qca8075_4>;
+	label = "lan3";
+	nvmem-cells = <&macaddr_dp5>;
+	nvmem-cell-names = "mac-address";
+};
+
+&wifi {
+	status = "okay";
+};
+DTSEOF
+
+# ========== 下载 common.mk ==========
+COMMON_MK_PATH="target/linux/qualcommax/image/common.mk"
+mkdir -p target/linux/qualcommax/image/
+if [ ! -f "${COMMON_MK_PATH}" ]; then
+    wget -q -O "${COMMON_MK_PATH}" \
+        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/image/common.mk"
+fi
+
+# ========== 创建 ipq807x.mk ==========
 cat > target/linux/qualcommax/image/ipq807x.mk << 'MKEOF'
 # SPDX-License-Identifier: GPL-2.0-only
 #
@@ -114,8 +479,6 @@ define Device/redmi_ax6
 endef
 TARGET_DEVICES += redmi_ax6
 MKEOF
-
-echo "✅ ipq807x.mk 创建成功"
 
 # ========== 清理联发科 ==========
 if [ -f ".config" ]; then
