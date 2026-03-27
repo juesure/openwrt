@@ -28,14 +28,14 @@ CONFIG_TARGET_mediatek=n
 CONFIG_TARGET_mediatek_filogic=n
 EOF
 
-# ========== 替换 ipq807x.mk 为精简版 ==========
+# ========== 替换 ipq807x.mk 为精简版（修正 common.mk 路径） ==========
 IPQ807X_MK="target/linux/qualcommax/image/ipq807x.mk"
 cat > ${IPQ807X_MK} << 'MKEOF'
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
 
-include ./common.mk
+include $(TOPDIR)/target/linux/qualcommax/image/common.mk
 
 # ===================== 通用构建函数 =====================
 define Build/asus-fake-ramdisk
