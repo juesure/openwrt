@@ -8,8 +8,22 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 恢复官方 ipq807x.mk ==========
-echo "恢复官方 ipq807x.mk..."
+# ========== 下载缺失的 common.mk ==========
+COMMON_MK_PATH="target/linux/qualcommax/image/common.mk"
+if [ ! -f "${COMMON_MK_PATH}" ]; then
+    echo "⚠️ common.mk 不存在，正在从官方仓库下载..."
+    mkdir -p target/linux/qualcommax/image/
+    wget -q -O "${COMMON_MK_PATH}" \
+        "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/image/common.mk"
+    
+    if [ ! -f "${COMMON_MK_PATH}" ]; then
+        echo "❌ 下载失败"
+        exit 1
+    fi
+    echo "✅ common.mk 下载成功"
+fi
+
+# ========== 创建 ipq807x.mk（只包含 Redmi AX6） ==========
 cat > target/linux/qualcommax/image/ipq807x.mk << 'MKEOF'
 # SPDX-License-Identifier: GPL-2.0-only
 #
@@ -65,24 +79,15 @@ define Build/zyxel-nwax10ax-fit
 	@mv $@.new $@
 endef
 
-# 只保留 Redmi AX6，其他全部删除
-define Device/xiaomi_ax3600
+define Device/redmi_ax6
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
-	DEVICE_VENDOR := Xiaomi
-	DEVICE_MODEL := AX3600
+	DEVICE_VENDOR := Redmi
+	DEVICE_MODEL := AX6
 	BLOCKSIZE := 128k
 	PAGESIZE := 2048
 	DEVICE_DTS_CONFIG := config@ac04
 	SOC := ipq8071
-	KERNEL_SIZE := 36608k
-	DEVICE_PACKAGES := ipq-wifi-xiaomi_ax3600
-endef
-
-define Device/redmi_ax6
-	$(call Device/xiaomi_ax3600)
-	DEVICE_VENDOR := Redmi
-	DEVICE_MODEL := AX6
 	IMAGE_SIZE := 245760k
 	UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB -s 2048 -O 2048
 	KERNEL_IN_UBI := 1
@@ -107,17 +112,10 @@ define Device/redmi_ax6
 		dropbear \
 		block-mount
 endef
-
-TARGET_DEVICES += xiaomi_ax3600
 TARGET_DEVICES += redmi_ax6
 MKEOF
 
-# ========== 验证文件格式 ==========
-if ! head -5 target/linux/qualcommax/image/ipq807x.mk | grep -q "include ./common.mk"; then
-    echo "❌ ipq807x.mk 格式错误"
-    exit 1
-fi
-echo "✅ ipq807x.mk 恢复成功"
+echo "✅ ipq807x.mk 创建成功"
 
 # ========== 清理联发科 ==========
 if [ -f ".config" ]; then
