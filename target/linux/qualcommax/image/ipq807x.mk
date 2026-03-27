@@ -388,20 +388,16 @@ define Device/qnap_301w
 	DEVICE_PACKAGES := kmod-fs-f2fs f2fs-tools ipq-wifi-qnap_301w
 endef
 TARGET_DEVICES += qnap_301w
+# ===================== Redmi AX6 配置 =====================
 define Device/redmi_ax6
 	$(call Device/xiaomi_ax3600)
 	DEVICE_VENDOR := Redmi
 	DEVICE_MODEL := AX6
-	# 256MB Flash 配置（实际可用 240MB）
 	IMAGE_SIZE := 245760k
-	# UBI 参数（匹配 NAND 参数：2048页大小，128KB块大小）
 	UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB -s 2048 -O 2048
-	# 确保内核在 UBI 中
 	KERNEL_IN_UBI := 1
-	# 生成完整的 UBI 镜像
 	IMAGES += factory.ubi
 	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
-	# 固件包（IPQ8071A 专用）
 	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 \
 		kmod-ath11k-ahb \
 		ath11k-firmware-ipq8071
