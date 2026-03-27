@@ -28,78 +28,19 @@ CONFIG_TARGET_mediatek=n
 CONFIG_TARGET_mediatek_filogic=n
 EOF
 
-# ========== 替换 ipq807x.mk 为精简版（修正 common.mk 路径） ==========
+# ========== 修改 ipq807x.mk 中的 redmi_ax6 配置 ==========
 IPQ807X_MK="target/linux/qualcommax/image/ipq807x.mk"
-cat > ${IPQ807X_MK} << 'MKEOF'
-# SPDX-License-Identifier: GPL-2.0-only
-#
-# Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
-
-include $(TOPDIR)/target/linux/qualcommax/image/common.mk
-
-# ===================== 通用构建函数 =====================
-define Build/asus-fake-ramdisk
-	rm -rf $(KDIR)/tmp/fakerd
-	dd if=/dev/zero bs=32 count=1 > $(KDIR)/tmp/fakerd
-endef
-
-define Build/asus-fake-rootfs
-	$(eval comp=$(word 1,$(1)))
-	$(eval filepath=$(word 2,$(1)))
-	$(eval filecont=$(word 3,$(1)))
-	rm -rf $(KDIR)/tmp/fakefs $(KDIR)/tmp/fakehsqs
-	mkdir -p $(KDIR)/tmp/fakefs/$$(dirname $(filepath))
-	echo '$(filecont)' > $(KDIR)/tmp/fakefs/$(filepath)
-	$(STAGING_DIR_HOST)/bin/mksquashfs4 $(KDIR)/tmp/fakefs $(KDIR)/tmp/fakehsqs -comp $(comp) \
-		-b 4096 -no-exports -no-sparse -no-xattrs -all-root -noappend \
-		$(wordlist 4,$(words $(1)),$(1))
-endef
-
-define Build/asus-trx
-	$(STAGING_DIR_HOST)/bin/asusuimage $(wordlist 1,$(words $(1)),$(1)) -i $@ -o $@.new
-	mv $@.new $@
-endef
-
-define Build/netgear-rbx750-qsdk-ipq-factory
-	$(CP) $(FLASH_SCRIPT) $(KDIR_TMP)/
-	echo "VERSION : V8.0.0.0_$(LINUX_VERSION)" > $@.metadata
-	echo "MODEL_ID : $(DEVICE_MODEL)" >> $@.metadata
-	$(TOPDIR)/scripts/mkits-qsdk-ipq-image.sh $@.its $(FLASH_SCRIPT) txt $@.metadata ubi $@
-	PATH=$(LINUX_DIR)/scripts/dtc:$(PATH) mkimage -f $@.its $@.new
-	@mv $@.new $@
-endef
-
-define Build/wax6xx-netgear-tar
-	mkdir $@.tmp
-	mv $@ $@.tmp/nand-ipq807x-apps.img
-	md5sum $@.tmp/nand-ipq807x-apps.img | cut -c 1-32 > $@.tmp/nand-ipq807x-apps.md5sum
-	echo $(DEVICE_MODEL) > $@.tmp/metadata.txt
-	echo $(DEVICE_MODEL)"_V99.9.9.9" > $@.tmp/version
-	tar -C $@.tmp/ -cf $@ .
-	rm -rf $@.tmp
-endef
-
-define Build/zyxel-nwax10ax-fit
-	$(TOPDIR)/scripts/mkits-zyxel-fit-filogic.sh \
-		$@.its $@ "$(ZYXEL_MODEL_ID) ff ff ff ff ff ff ff ff"
-	PATH=$(LINUX_DIR)/scripts/dtc:$(PATH) mkimage -f $@.its $@.new
-	@mv $@.new $@
-endef
-
-# ===================== Redmi AX6 配置 =====================
-define Device/xiaomi_ax3600
-	$(call Device/FitImage)
-	$(call Device/UbiFit)
-	DEVICE_VENDOR := Xiaomi
-	DEVICE_MODEL := AX3600
-	BLOCKSIZE := 128k
-	PAGESIZE := 2048
-	DEVICE_DTS_CONFIG := config@ac04
-	SOC := ipq8071
-	KERNEL_SIZE := 36608k
-	DEVICE_PACKAGES := ipq-wifi-xiaomi_ax3600
-endef
-TARGET_DEVICES += xiaomi_ax3600
+if [ -f "${IPQ807X_MK}" ]; then
+  # 备份原文件
+  cp ${IPQ807X_MK} ${IPQ807X_MK}.bak
+  
+  # 查找 redmi_ax6 定义并修改
+  # 先删除旧的 redmi_ax6 定义
+  sed -i '/^define Device\/redmi_ax6/,/^endef/d' ${IPQ807X_MK}
+  sed -i '/^TARGET_DEVICES += redmi_ax6/d' ${IPQ807X_MK}
+  
+  # 在 xiaomi_ax3600 定义后添加新的 redmi_ax6 定义
+  cat >> ${IPQ807X_MK} << 'MKEOF'
 
 define Device/redmi_ax6
 	$(call Device/xiaomi_ax3600)
@@ -129,6 +70,7 @@ define Device/redmi_ax6
 endef
 TARGET_DEVICES += redmi_ax6
 MKEOF
+fi
 
 # ========== 添加 WiFi 固件修复脚本 ==========
 mkdir -p files/etc/init.d
