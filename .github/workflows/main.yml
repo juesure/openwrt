@@ -35,11 +35,7 @@ jobs:
             gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
             python3-distutils rsync unzip zlib1g-dev file wget libelf-dev \
             libfuse-dev device-tree-compiler mtd-utils squashfs-tools \
-            dosfstools parted kmod zip gh lz4 lzop \
-            m4  # ← 添加 m4
-          
-          # 确保 m4 可用
-          which m4 || sudo apt install -y m4
+            dosfstools parted kmod zip gh lz4 lzop m4
           
           sudo timedatectl set-timezone "$TZ"
           mkdir -p "$WORK_DIR"
@@ -60,15 +56,13 @@ jobs:
           cd "$WORK_DIR/openwrt"
           "$DIY_SCRIPT"
           cp "$CONFIG_FILE" .config
-          # 添加UBI优化选项
           echo "CONFIG_MTD_UBI_FASTMAP=y" >> .config
           echo "CONFIG_MTD_UBI_BLOCK=y" >> .config
           make defconfig
+
       - name: Prepare Toolchain
         run: |
           cd "$WORK_DIR/openwrt"
-          
-          # 先编译工具链
           echo "准备编译工具链..."
           make toolchain/compile -j$(nproc) 2>&1 | tee toolchain.log
           
@@ -79,6 +73,7 @@ jobs:
           fi
           
           echo "✅ 工具链准备完成"
+
       - name: Compile
         id: compile
         run: |
@@ -120,103 +115,104 @@ jobs:
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
-            - name: Package & Release
-              if: steps.compile.outputs.status == 'success'
-              run: |
-                mkdir -p /home/runner/firmware
-                cd "$FIRMWARE_OUTPUT_DIR"
+
+      - name: Package & Release
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          mkdir -p /home/runner/firmware
+          cd "$FIRMWARE_OUTPUT_DIR"
+          
+          echo "=========================================="
+          echo "📁 当前目录文件列表："
+          echo "=========================================="
+          ls -lh
+          
+          # 1. 复制所有固件文件
+          echo ""
+          echo "=========================================="
+          echo "📦 复制固件文件..."
+          echo "=========================================="
+          
+          cp *sysupgrade.bin /home/runner/firmware/ 2>/dev/null && echo "✅ sysupgrade.bin 已复制"
+          cp *factory.ubi /home/runner/firmware/ 2>/dev/null && echo "✅ factory.ubi 已复制"
+          cp *rootfs.ubi /home/runner/firmware/ 2>/dev/null && echo "✅ rootfs.ubi 已复制"
+          cp *initramfs* /home/runner/firmware/ 2>/dev/null && echo "✅ initramfs 已复制"
+          
+          # 2. 确保有UBI镜像（用于TTL刷写）
+          echo ""
+          echo "=========================================="
+          echo "🔧 处理UBI镜像文件..."
+          echo "=========================================="
+          
+          # 检查是否有UBI文件
+          UBI_FILE_COUNT=$(ls /home/runner/firmware/*.ubi 2>/dev/null | wc -l)
+          
+          if [ $UBI_FILE_COUNT -gt 0 ]; then
+            # 如果已经有UBI文件，复制为标准名称
+            echo "✅ 找到 $UBI_FILE_COUNT 个UBI文件"
+            FIRST_UBI=$(ls /home/runner/firmware/*.ubi | head -1)
+            echo "第一个UBI文件: $FIRST_UBI"
+            cp "$FIRST_UBI" /home/runner/firmware/redmi_ax6_mtd12_ubi.bin
+            echo "✅ 已创建 redmi_ax6_mtd12_ubi.bin"
+            
+            # 显示UBI文件大小
+            UBI_SIZE=$(stat -c%s /home/runner/firmware/redmi_ax6_mtd12_ubi.bin)
+            echo "UBI文件大小: $UBI_SIZE bytes ($((UBI_SIZE / 1024 / 1024)) MB)"
+          else
+            # 如果没有UBI文件，从sysupgrade.bin提取
+            echo "⚠️ 未找到UBI文件，尝试从sysupgrade.bin提取..."
+            SYSUPGRADE_BIN=$(ls "$FIRMWARE_OUTPUT_DIR"/*sysupgrade.bin 2>/dev/null | head -1)
+            
+            if [ -n "$SYSUPGRADE_BIN" ]; then
+              # 获取sysupgrade.bin大小
+              FILE_SIZE=$(stat -c%s "$SYSUPGRADE_BIN")
+              FILE_SIZE_MB=$((FILE_SIZE / 1024 / 1024))
+              echo "sysupgrade.bin: $SYSUPGRADE_BIN"
+              echo "sysupgrade.bin 大小: $FILE_SIZE bytes ($FILE_SIZE_MB MB)"
+              
+              # IPQ807x的UBI镜像偏移量通常是4MB (4194304 bytes)
+              OFFSET=4194304  # 4MB
+              
+              if [ $FILE_SIZE -gt $OFFSET ]; then
+                echo "从偏移 ${OFFSET} bytes 处提取UBI..."
+                dd if="$SYSUPGRADE_BIN" of=/home/runner/firmware/redmi_ax6_mtd12_ubi.bin bs=1M skip=4 2>/dev/null
+                EXTRACT_SIZE=$(stat -c%s /home/runner/firmware/redmi_ax6_mtd12_ubi.bin)
+                EXTRACT_SIZE_MB=$((EXTRACT_SIZE / 1024 / 1024))
+                echo "✅ 提取UBI成功，大小: $EXTRACT_SIZE bytes ($EXTRACT_SIZE_MB MB)"
                 
-                echo "=========================================="
-                echo "📁 当前目录文件列表："
-                echo "=========================================="
-                ls -lh
-                
-                # 1. 复制所有固件文件
-                echo ""
-                echo "=========================================="
-                echo "📦 复制固件文件..."
-                echo "=========================================="
-                
-                cp *sysupgrade.bin /home/runner/firmware/ 2>/dev/null && echo "✅ sysupgrade.bin 已复制"
-                cp *factory.ubi /home/runner/firmware/ 2>/dev/null && echo "✅ factory.ubi 已复制"
-                cp *rootfs.ubi /home/runner/firmware/ 2>/dev/null && echo "✅ rootfs.ubi 已复制"
-                cp *initramfs* /home/runner/firmware/ 2>/dev/null && echo "✅ initramfs 已复制"
-                
-                # 2. 确保有UBI镜像（用于TTL刷写）
-                echo ""
-                echo "=========================================="
-                echo "🔧 处理UBI镜像文件..."
-                echo "=========================================="
-                
-                # 检查是否有UBI文件
-                UBI_FILE_COUNT=$(ls /home/runner/firmware/*.ubi 2>/dev/null | wc -l)
-                
-                if [ $UBI_FILE_COUNT -gt 0 ]; then
-                  # 如果已经有UBI文件，复制为标准名称
-                  echo "✅ 找到 $UBI_FILE_COUNT 个UBI文件"
-                  FIRST_UBI=$(ls /home/runner/firmware/*.ubi | head -1)
-                  echo "第一个UBI文件: $FIRST_UBI"
-                  cp "$FIRST_UBI" /home/runner/firmware/redmi_ax6_mtd12_ubi.bin
-                  echo "✅ 已创建 redmi_ax6_mtd12_ubi.bin"
-                  
-                  # 显示UBI文件大小
-                  UBI_SIZE=$(stat -c%s /home/runner/firmware/redmi_ax6_mtd12_ubi.bin)
-                  echo "UBI文件大小: $UBI_SIZE bytes ($((UBI_SIZE / 1024 / 1024)) MB)"
+                # 验证提取的UBI文件是否有效
+                if hexdump -C /home/runner/firmware/redmi_ax6_mtd12_ubi.bin 2>/dev/null | head -1 | grep -q "55 42 49 23"; then
+                  echo "✅ UBI文件验证通过（魔术字 UBI# 正确）"
                 else
-                  # 如果没有UBI文件，从sysupgrade.bin提取
-                  echo "⚠️ 未找到UBI文件，尝试从sysupgrade.bin提取..."
-                  SYSUPGRADE_BIN=$(ls *sysupgrade.bin 2>/dev/null | head -1)
-                  
-                  if [ -n "$SYSUPGRADE_BIN" ]; then
-                    # 获取sysupgrade.bin大小
-                    FILE_SIZE=$(stat -c%s "$SYSUPGRADE_BIN")
-                    FILE_SIZE_MB=$((FILE_SIZE / 1024 / 1024))
-                    echo "sysupgrade.bin: $SYSUPGRADE_BIN"
-                    echo "sysupgrade.bin 大小: $FILE_SIZE bytes ($FILE_SIZE_MB MB)"
-                    
-                    # IPQ807x的UBI镜像偏移量通常是4MB (4194304 bytes)
-                    OFFSET=4194304  # 4MB
-                    
-                    if [ $FILE_SIZE -gt $OFFSET ]; then
-                      echo "从偏移 ${OFFSET} bytes 处提取UBI..."
-                      dd if="$SYSUPGRADE_BIN" of=/home/runner/firmware/redmi_ax6_mtd12_ubi.bin bs=1M skip=4 2>/dev/null
-                      EXTRACT_SIZE=$(stat -c%s /home/runner/firmware/redmi_ax6_mtd12_ubi.bin)
-                      EXTRACT_SIZE_MB=$((EXTRACT_SIZE / 1024 / 1024))
-                      echo "✅ 提取UBI成功，大小: $EXTRACT_SIZE bytes ($EXTRACT_SIZE_MB MB)"
-                      
-                      # 验证提取的UBI文件是否有效（检查UBI魔术字）
-                      if hexdump -C /home/runner/firmware/redmi_ax6_mtd12_ubi.bin 2>/dev/null | head -1 | grep -q "55 42 49 23"; then
-                        echo "✅ UBI文件验证通过（魔术字 UBI# 正确）"
-                      else
-                        echo "⚠️ 警告：提取的UBI文件可能无效（魔术字不正确）"
-                        echo "UBI文件头部内容："
-                        hexdump -C /home/runner/firmware/redmi_ax6_mtd12_ubi.bin | head -3
-                      fi
-                    else
-                      echo "❌ sysupgrade.bin 太小 ($FILE_SIZE bytes)，无法提取UBI"
-                    fi
-                  else
-                    echo "❌ 未找到sysupgrade.bin，无法生成UBI文件"
-                  fi
+                  echo "⚠️ 警告：提取的UBI文件可能无效（魔术字不正确）"
+                  echo "UBI文件头部内容："
+                  hexdump -C /home/runner/firmware/redmi_ax6_mtd12_ubi.bin | head -3
                 fi
-                
-                # 3. 创建MD5校验文件
-                echo ""
-                echo "=========================================="
-                echo "🔐 生成MD5校验文件..."
-                echo "=========================================="
-                cd /home/runner/firmware
-                md5sum * > md5sum.txt
-                echo "✅ MD5校验文件已生成"
-                
-                # 4. 显示最终文件列表
-                echo ""
-                echo "=========================================="
-                echo "📋 最终固件列表："
-                echo "=========================================="
-                ls -lh
-                echo ""
-                echo "文件总数: $(ls -1 | wc -l)"
+              else
+                echo "❌ sysupgrade.bin 太小 ($FILE_SIZE bytes)，无法提取UBI"
+              fi
+            else
+              echo "❌ 未找到sysupgrade.bin，无法生成UBI文件"
+            fi
+          fi
+          
+          # 3. 创建MD5校验文件
+          echo ""
+          echo "=========================================="
+          echo "🔐 生成MD5校验文件..."
+          echo "=========================================="
+          cd /home/runner/firmware
+          md5sum * > md5sum.txt
+          echo "✅ MD5校验文件已生成"
+          
+          # 4. 显示最终文件列表
+          echo ""
+          echo "=========================================="
+          echo "📋 最终固件列表："
+          echo "=========================================="
+          ls -lh
+          echo ""
+          echo "文件总数: $(ls -1 | wc -l)"
           
           # 5. 发布到GitHub Release
           echo ""
@@ -226,3 +222,11 @@ jobs:
           
           BUILD_TIME=$(date +%Y%m%d_%H%M)
           RELEASE_TAG="AX6-256M-$BUILD_TIME"
+          
+          # 创建 Release
+          gh release create "$RELEASE_TAG" \
+            --title "Redmi AX6 256M Firmware $BUILD_TIME" \
+            --notes "自动编译的 Redmi AX6 256M 固件" \
+            /home/runner/firmware/* || true
+          
+          echo "✅ Release 已创建: $RELEASE_TAG"
