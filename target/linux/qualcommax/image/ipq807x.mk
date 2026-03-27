@@ -411,7 +411,6 @@ define Device/redmi_ax6
 	KERNEL_IN_UBI := 1
 	IMAGES += factory.ubi
 	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
-	# 确保固件包完整
 	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 \
 		kmod-ath11k-ahb \
 		ath11k-firmware-ipq8071 \
@@ -422,8 +421,14 @@ define Device/redmi_ax6
 		luci-base \
 		luci-mod-admin-full \
 		luci-theme-argon \
-		luci-i18n-base-zh-cn
+		luci-i18n-base-zh-cn \
+		luci-i18n-argon-config-zh-cn \
+		luci-app-store \
+		luci-lib-store \
+		luci-i18n-store-zh-cn \
+		store-apps
 endef
+TARGET_DEVICES += redmi_ax6
 TARGET_DEVICES += redmi_ax6
 TARGET_DEVICES += spectrum_sax1v1k
 define Device/tcl_linkhub-hh500v
