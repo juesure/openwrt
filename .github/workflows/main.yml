@@ -35,7 +35,8 @@ jobs:
             gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
             python3-distutils rsync unzip zlib1g-dev file wget libelf-dev \
             libfuse-dev device-tree-compiler mtd-utils squashfs-tools \
-            dosfstools parted kmod zip gh lz4 lzop m4
+            dosfstools parted kmod zip gh lz4 lzop m4 \
+            python3-yaml python3-jsonschema  # 添加额外依赖
           
           sudo timedatectl set-timezone "$TZ"
           mkdir -p "$WORK_DIR"
@@ -56,8 +57,15 @@ jobs:
           cd "$WORK_DIR/openwrt"
           "$DIY_SCRIPT"
           cp "$CONFIG_FILE" .config
+          
+          # 添加 IPQ8071A 特定配置
           echo "CONFIG_MTD_UBI_FASTMAP=y" >> .config
           echo "CONFIG_MTD_UBI_BLOCK=y" >> .config
+          
+          # 确保使用正确的 SoC
+          echo "CONFIG_TARGET_qualcommax_ipq807x=y" >> .config
+          echo "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_redmi_ax6=y" >> .config
+          
           make defconfig
 
       - name: Prepare Toolchain
@@ -92,18 +100,16 @@ jobs:
             exit 1
           fi
           
-          # 直接检查固件文件
           FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
           
           echo "=========================================="
           echo "检查固件目录: $FIRMWARE_DIR"
           echo "=========================================="
           
-          # 显示目录内容
           ls -la "$FIRMWARE_DIR" || echo "目录不存在"
           
           # 查找 sysupgrade.bin 文件
-          SYSUPGRADE_FILE=$(find "$FIRMWARE_DIR" -name "*sysupgrade.bin" -type f | head -1)
+          SYSUPGRADE_FILE=$(find "$FIRMWARE_DIR" -name "*redmi_ax6*sysupgrade.bin" -type f | head -1)
           
           if [ -n "$SYSUPGRADE_FILE" ] && [ -f "$SYSUPGRADE_FILE" ]; then
             echo "✅ 找到固件文件: $SYSUPGRADE_FILE"
@@ -112,18 +118,27 @@ jobs:
             
             # 生成校验和
             cd "$FIRMWARE_DIR"
-            sha256sum *sysupgrade.bin > sha256sums
-            md5sum *sysupgrade.bin > md5sums
+            sha256sum *redmi_ax6*.bin > sha256sums
+            md5sum *redmi_ax6*.bin > md5sums
             echo "✅ 校验和文件已生成"
             
-            # 显示固件信息
             echo "=========================================="
             echo "生成的文件："
-            ls -lh
+            ls -lh *redmi_ax6*
             echo "=========================================="
+            
+            # 验证 UBI 镜像大小
+            if [ -f *redmi_ax6*.ubi ]; then
+              UBI_SIZE=$(stat -c%s *redmi_ax6*.ubi)
+              echo "UBI 镜像大小: $UBI_SIZE bytes ($((UBI_SIZE / 1024 / 1024)) MB)"
+              if [ $UBI_SIZE -gt 251658240 ]; then
+                echo "⚠️ 警告: UBI 镜像超过 240MB 分区限制"
+              fi
+            fi
           else
             echo "❌ 未找到固件文件"
-            echo "在 $FIRMWARE_DIR 中查找失败"
+            echo "目录内容："
+            ls -la "$FIRMWARE_DIR"
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
@@ -137,14 +152,15 @@ jobs:
           cd "$FIRMWARE_OUTPUT_DIR"
           
           # 复制固件文件
-          cp *sysupgrade.bin /home/runner/firmware/ 2>/dev/null || true
-          cp *factory.ubi /home/runner/firmware/ 2>/dev/null || true
-          cp *rootfs.ubi /home/runner/firmware/ 2>/dev/null || true
+          cp *redmi_ax6*sysupgrade.bin /home/runner/firmware/ 2>/dev/null || true
+          cp *redmi_ax6*factory.ubi /home/runner/firmware/ 2>/dev/null || true
+          cp *redmi_ax6*rootfs.ubi /home/runner/firmware/ 2>/dev/null || true
           
-          # 生成 UBI 文件
+          # 生成 TTL 刷写专用文件
           if ls /home/runner/firmware/*.ubi 1>/dev/null 2>&1; then
             FIRST_UBI=$(ls /home/runner/firmware/*.ubi | head -1)
             cp "$FIRST_UBI" /home/runner/firmware/redmi_ax6_mtd12_ubi.bin
+            echo "✅ 生成 redmi_ax6_mtd12_ubi.bin"
           fi
           
           # 生成 MD5
@@ -155,6 +171,55 @@ jobs:
           echo "待发布的文件："
           ls -lh
           
+          # 创建刷写说明文件
+          cat > FLASH_GUIDE.txt << 'EOF'
+========================================
+Redmi AX6 256MB Flash 刷写指南
+========================================
+
+【重要】刷写前请确认：
+1. Flash 已更换为 256MB
+2. ART 分区已备份（包含 WiFi 校准数据）
+3. TTL 已连接
+
+【方法一】TTL刷写（推荐）
+----------------------------------------
+# 设置网络
+setenv ipaddr 192.168.1.1
+setenv serverip 192.168.1.2
+saveenv
+
+# 下载固件
+tftpboot 0x44000000 redmi_ax6_mtd12_ubi.bin
+
+# 擦除并写入（240MB）
+nand erase 0xa00000 0xf000000
+nand write 0x44000000 0xa00000 0xf000000
+
+# 重启
+reset
+
+【方法二】OpenWrt 系统内刷写
+----------------------------------------
+ubiformat /dev/mtd12 -y -f redmi_ax6_mtd12_ubi.bin
+reboot
+
+【方法三】Web 界面升级
+----------------------------------------
+使用 *sysupgrade.bin 文件在 LuCI 界面中升级
+
+【验证刷写成功】
+----------------------------------------
+cat /proc/mtd | grep rootfs
+# 应显示: mtd12: 0f000000 00020000 "rootfs"
+
+ubinfo /dev/ubi0 -a
+# 应显示 kernel, rootfs, rootfs_data 三个卷
+
+df -h
+# 查看 overlay 可用空间
+EOF
+          
           # 创建 Release
           BUILD_TIME=$(date +%Y%m%d_%H%M)
           RELEASE_TAG="AX6-256M-$BUILD_TIME"
@@ -162,7 +227,7 @@ jobs:
           gh release create "$RELEASE_TAG" ./* \
             -R ${GITHUB_REPOSITORY} \
             --title "Redmi AX6 256M Flash 固件 $BUILD_TIME" \
-            --notes "固件说明: 适配256MB Flash, 包含LuCI中文界面, UBI坏块管理优化。刷写方法: TTL执行 tftpboot 0x44000000 redmi_ax6_mtd12_ubi.bin; nand erase 0xa00000 0xf000000; nand write 0x44000000 0xa00000 0xf000000; reset" \
+            --notes-file FLASH_GUIDE.txt \
             || echo "Release创建失败"
           
           echo "Release创建完成: $RELEASE_TAG"
