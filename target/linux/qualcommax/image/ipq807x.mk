@@ -402,16 +402,20 @@ define Device/redmi_ax6
 		kmod-ath11k-ahb \
 		ath11k-firmware-ipq8071
 endef
-TARGET_DEVICES += redmi_ax6
-define Device/spectrum_sax1v1k
-	$(call Device/FitImage)
-	$(call Device/EmmcImage)
-	DEVICE_VENDOR := Spectrum
-	DEVICE_MODEL := SAX1V1K
-	DEVICE_DTS_CONFIG := config@rt5010w-d187-rev6
-	SOC := ipq8072
-	IMAGES := sysupgrade.bin
-	DEVICE_PACKAGES := kmod-fs-f2fs f2fs-tools ipq-wifi-spectrum_sax1v1k
+define Device/redmi_ax6
+    $(call Device/xiaomi_ax3600)
+    DEVICE_VENDOR := Redmi
+    DEVICE_MODEL := AX6
+    IMAGE_SIZE := 245760k
+    UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB -s 2048 -O 2048
+    KERNEL_IN_UBI := 1
+    IMAGES += factory.ubi
+    IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
+    # 确保两个固件包都包含
+    DEVICE_PACKAGES := ipq-wifi-redmi_ax6 \
+        kmod-ath11k-ahb \
+        ath11k-firmware-ipq8071 \
+        ath11k-firmware-ipq8074
 endef
 TARGET_DEVICES += spectrum_sax1v1k
 define Device/tcl_linkhub-hh500v
