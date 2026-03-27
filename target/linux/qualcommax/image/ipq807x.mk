@@ -1,6 +1,59 @@
-# ===================== 只编译 Redmi AX6，注释所有其他设备 =====================
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
 
-# 保留基础设备定义（redmi_ax6 依赖）
+include ./common.mk
+
+# ===================== 通用构建函数 =====================
+define Build/asus-fake-ramdisk
+	rm -rf $(KDIR)/tmp/fakerd
+	dd if=/dev/zero bs=32 count=1 > $(KDIR)/tmp/fakerd
+endef
+
+define Build/asus-fake-rootfs
+	$(eval comp=$(word 1,$(1)))
+	$(eval filepath=$(word 2,$(1)))
+	$(eval filecont=$(word 3,$(1)))
+	rm -rf $(KDIR)/tmp/fakefs $(KDIR)/tmp/fakehsqs
+	mkdir -p $(KDIR)/tmp/fakefs/$$(dirname $(filepath))
+	echo '$(filecont)' > $(KDIR)/tmp/fakefs/$(filepath)
+	$(STAGING_DIR_HOST)/bin/mksquashfs4 $(KDIR)/tmp/fakefs $(KDIR)/tmp/fakehsqs -comp $(comp) \
+		-b 4096 -no-exports -no-sparse -no-xattrs -all-root -noappend \
+		$(wordlist 4,$(words $(1)),$(1))
+endef
+
+define Build/asus-trx
+	$(STAGING_DIR_HOST)/bin/asusuimage $(wordlist 1,$(words $(1)),$(1)) -i $@ -o $@.new
+	mv $@.new $@
+endef
+
+define Build/netgear-rbx750-qsdk-ipq-factory
+	$(CP) $(FLASH_SCRIPT) $(KDIR_TMP)/
+	echo "VERSION : V8.0.0.0_$(LINUX_VERSION)" > $@.metadata
+	echo "MODEL_ID : $(DEVICE_MODEL)" >> $@.metadata
+	$(TOPDIR)/scripts/mkits-qsdk-ipq-image.sh $@.its $(FLASH_SCRIPT) txt $@.metadata ubi $@
+	PATH=$(LINUX_DIR)/scripts/dtc:$(PATH) mkimage -f $@.its $@.new
+	@mv $@.new $@
+endef
+
+define Build/wax6xx-netgear-tar
+	mkdir $@.tmp
+	mv $@ $@.tmp/nand-ipq807x-apps.img
+	md5sum $@.tmp/nand-ipq807x-apps.img | cut -c 1-32 > $@.tmp/nand-ipq807x-apps.md5sum
+	echo $(DEVICE_MODEL) > $@.tmp/metadata.txt
+	echo $(DEVICE_MODEL)"_V99.9.9.9" > $@.tmp/version
+	tar -C $@.tmp/ -cf $@ .
+	rm -rf $@.tmp
+endef
+
+define Build/zyxel-nwax10ax-fit
+	$(TOPDIR)/scripts/mkits-zyxel-fit-filogic.sh \
+		$@.its $@ "$(ZYXEL_MODEL_ID) ff ff ff ff ff ff ff ff"
+	PATH=$(LINUX_DIR)/scripts/dtc:$(PATH) mkimage -f $@.its $@.new
+	@mv $@.new $@
+endef
+
+# ===================== Redmi AX6 配置 =====================
 define Device/xiaomi_ax3600
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
@@ -15,7 +68,6 @@ define Device/xiaomi_ax3600
 endef
 TARGET_DEVICES += xiaomi_ax3600
 
-# Redmi AX6 配置
 define Device/redmi_ax6
 	$(call Device/xiaomi_ax3600)
 	DEVICE_VENDOR := Redmi
@@ -44,15 +96,4 @@ define Device/redmi_ax6
 endef
 TARGET_DEVICES += redmi_ax6
 
-# ===================== 以下所有设备全部注释掉 =====================
-# define Device/aliyun_ap8220
-# 	...
-# endef
-# TARGET_DEVICES += aliyun_ap8220
-
-# define Device/arcadyan_aw1000
-# 	...
-# endef
-# TARGET_DEVICES += arcadyan_aw1000
-
-# ... 以此类推，注释掉所有其他设备 ...
+# 注意：其他所有设备已移除，只编译 Redmi AX6
