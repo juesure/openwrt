@@ -8,22 +8,20 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 1. 重写 ipq8071-ax3600.dtsi（所有宏定义直接写在文件内）==========
+# ========== 重写 ipq8071-ax3600.dtsi（纯英文，无中文注释）==========
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
-/* ESS_PORT 宏定义 */
-#define ESS_PORT0			0
-#define ESS_PORT1			1
-#define ESS_PORT2			2
-#define ESS_PORT3			3
-#define ESS_PORT4			4
-#define ESS_PORT5			5
-#define ESS_PORT6			6
-#define ESS_PORT7			7
+#define ESS_PORT0		0
+#define ESS_PORT1		1
+#define ESS_PORT2		2
+#define ESS_PORT3		3
+#define ESS_PORT4		4
+#define ESS_PORT5		5
+#define ESS_PORT6		6
+#define ESS_PORT7		7
 
-/* MAC_MODE 宏定义 */
 #define MAC_MODE_PSGMII		0
 #define MAC_MODE_SGMII		1
 #define MAC_MODE_QSGMII		2
