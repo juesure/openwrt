@@ -8,9 +8,12 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 1. 创建 ipq8074-ess.dtsi ==========
-mkdir -p target/linux/qualcommax/dts/
-cat > target/linux/qualcommax/dts/ipq8074-ess.dtsi << 'EOF'
+# ========== 1. 重写 ipq8071-ax3600.dtsi（所有宏定义直接写在文件内）==========
+cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
+
+/* ESS_PORT 宏定义 */
 #define ESS_PORT0			0
 #define ESS_PORT1			1
 #define ESS_PORT2			2
@@ -20,16 +23,11 @@ cat > target/linux/qualcommax/dts/ipq8074-ess.dtsi << 'EOF'
 #define ESS_PORT6			6
 #define ESS_PORT7			7
 
+/* MAC_MODE 宏定义 */
 #define MAC_MODE_PSGMII		0
 #define MAC_MODE_SGMII		1
 #define MAC_MODE_QSGMII		2
-EOF
 
-# ========== 2. 重写 ipq8071-ax3600.dtsi（最小化，只保留必要内容）==========
-cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
-// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
-#include "ipq8074-ess.dtsi"
 / {
 	#address-cells = <2>;
 	#size-cells = <2>;
@@ -597,7 +595,7 @@ DTSEOF
 
 echo "✅ ipq8071-ax3600.dtsi 已重写"
 
-# ========== 3. 修改 ipq807x.mk ==========
+# ========== 2. 修改 ipq807x.mk ==========
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
 if [ -f "$MK_FILE" ]; then
     sed -i 's/SOC := ipq8074/SOC := ipq8071/' "$MK_FILE"
@@ -639,7 +637,7 @@ MKEOF
     echo "✅ ipq807x.mk 已修改"
 fi
 
-# ========== 4. 清理联发科 ==========
+# ========== 3. 清理联发科 ==========
 if [ -f ".config" ]; then
   sed -i '/mt76/d' .config
   sed -i '/mediatek/d' .config
@@ -648,7 +646,7 @@ fi
 rm -rf package/kernel/mt76
 ./scripts/feeds uninstall -a mt76 2>/dev/null || true
 
-# ========== 5. 添加 WiFi 固件修复脚本 ==========
+# ========== 4. 添加 WiFi 固件修复脚本 ==========
 mkdir -p files/etc/init.d
 cat > files/etc/init.d/fix-wifi << 'EOF'
 #!/bin/sh /etc/rc.common
