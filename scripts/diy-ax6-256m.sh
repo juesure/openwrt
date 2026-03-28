@@ -8,11 +8,10 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 重写 ipq8071-ax3600.dtsi（纯英文，无中文注释）==========
+# ========== 重写 ipq8071-ax3600.dtsi（无空行，纯英文）==========
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
-
 #define ESS_PORT0		0
 #define ESS_PORT1		1
 #define ESS_PORT2		2
@@ -21,75 +20,60 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 #define ESS_PORT5		5
 #define ESS_PORT6		6
 #define ESS_PORT7		7
-
 #define MAC_MODE_PSGMII		0
 #define MAC_MODE_SGMII		1
 #define MAC_MODE_QSGMII		2
-
 / {
 	#address-cells = <2>;
 	#size-cells = <2>;
-
 	memory@40000000 {
 		device_type = "memory";
 		reg = <0x0 0x40000000 0x0 0x20000000>;
 	};
-
 	reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
-
 		nss_reserved: nss@40000000 {
 			reg = <0x0 0x40000000 0x0 0x1000000>;
 			no-map;
 		};
-
 		tzapp: tzapp@4a400000 {
 			reg = <0x0 0x4a400000 0x0 0x100000>;
 			no-map;
 		};
-
 		bootloader: bootloader@4a600000 {
 			reg = <0x0 0x4a600000 0x0 0x400000>;
 			no-map;
 		};
-
 		sbl: sbl@4aa00000 {
 			reg = <0x0 0x4aa00000 0x0 0x100000>;
 			no-map;
 		};
-
 		smem: smem@4ab00000 {
 			reg = <0x0 0x4ab00000 0x0 0x100000>;
 			no-map;
 		};
-
 		memory@4ac00000 {
 			reg = <0x0 0x4ac00000 0x0 0x400000>;
 			no-map;
 		};
-
 		wcnss: wcnss@4b000000 {
 			reg = <0x0 0x4b000000 0x0 0x3700000>;
 			no-map;
 		};
-
 		q6_etr_dump: q6_etr_dump@4e700000 {
 			reg = <0x0 0x4e700000 0x0 0x100000>;
 			no-map;
 		};
-
 		m3_dump: m3_dump@4e800000 {
 			reg = <0x0 0x4e800000 0x0 0x100000>;
 			no-map;
 		};
 	};
-
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
-
 		cpu@0 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a53";
@@ -97,7 +81,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			enable-method = "psci";
 			next-level-cache = <&L2_0>;
 		};
-
 		cpu@1 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a53";
@@ -105,7 +88,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			enable-method = "psci";
 			next-level-cache = <&L2_0>;
 		};
-
 		cpu@2 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a53";
@@ -113,7 +95,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			enable-method = "psci";
 			next-level-cache = <&L2_0>;
 		};
-
 		cpu@3 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a53";
@@ -121,24 +102,20 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			enable-method = "psci";
 			next-level-cache = <&L2_0>;
 		};
-
 		L2_0: l2-cache {
 			compatible = "cache";
 			cache-level = <2>;
 		};
 	};
-
 	psci {
 		compatible = "arm,psci-1.0";
 		method = "smc";
 	};
-
 	soc: soc@0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		ranges = <0 0 0 0xffffffff>;
 		compatible = "simple-bus";
-
 		intc: interrupt-controller@b000000 {
 			compatible = "qcom,msm-qgic2";
 			interrupt-controller;
@@ -146,7 +123,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			reg = <0x0b000000 0x1000>,
 			      <0x0b002000 0x1000>;
 		};
-
 		timer@b120000 {
 			compatible = "arm,armv7-timer-mem";
 			#address-cells = <1>;
@@ -154,7 +130,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			ranges;
 			reg = <0x0b120000 0x1000>;
 			clock-frequency = <19200000>;
-
 			frame@b120000 {
 				frame-number = <0>;
 				interrupts = <0 8 4>,
@@ -163,7 +138,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 				      <0x0b122000 0x1000>;
 			};
 		};
-
 		apcs_glb: mailbox@b111000 {
 			compatible = "qcom,ipq6018-apcs-apps-global";
 			reg = <0x0b111000 0x1000>;
@@ -171,7 +145,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			clocks = <&xo>;
 			clock-names = "xo";
 		};
-
 		blsp1_uart5: serial@78b3000 {
 			compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
 			reg = <0x078b3000 0x200>;
@@ -181,7 +154,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			clock-names = "core", "iface";
 			status = "disabled";
 		};
-
 		prng: rng@22000 {
 			compatible = "qcom,prng";
 			reg = <0x00022000 0x200>;
@@ -189,7 +161,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			clock-names = "core";
 			status = "disabled";
 		};
-
 		cryptobam: dma-controller@704000 {
 			compatible = "qcom,bam-v1.7.0";
 			reg = <0x00704000 0x20000>;
@@ -199,7 +170,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			qcom,controlled-remotely;
 			status = "disabled";
 		};
-
 		crypto: crypto@73a000 {
 			compatible = "qcom,crypto-v5.1";
 			reg = <0x0073a000 0x6000>;
@@ -211,7 +181,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			dma-names = "rx", "tx";
 			status = "disabled";
 		};
-
 		qpic_bam: dma-controller@7984000 {
 			compatible = "qcom,bam-v1.7.0";
 			reg = <0x07984000 0x1a000>;
@@ -221,7 +190,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			qcom,controlled-remotely;
 			status = "disabled";
 		};
-
 		qpic_nand: nand-controller@79b0000 {
 			compatible = "qcom,ipq8074-nand";
 			reg = <0x079b0000 0x10000>;
@@ -236,7 +204,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			dma-names = "tx", "rx", "cmd";
 			status = "disabled";
 		};
-
 		mdio: mdio@90000 {
 			compatible = "qcom,ipq8074-mdio";
 			reg = <0x00090000 0x64>;
@@ -244,7 +211,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			#size-cells = <0>;
 			status = "disabled";
 		};
-
 		edma: edma@3a001000 {
 			compatible = "qcom,ipq8074-edma";
 			reg = <0x3a001000 0x8000>;
@@ -261,7 +227,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			reset-names = "edma";
 			status = "disabled";
 		};
-
 		ess-switch@3a000000 {
 			compatible = "qcom,ipq8074-ess-switch";
 			reg = <0x3a000000 0x1000000>;
@@ -277,33 +242,28 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
-
 			switch-cpu@0 {
 				compatible = "qcom,ess-switch-cpu";
 				reg = <0>;
 			};
-
 			switch-cpu@1 {
 				compatible = "qcom,ess-switch-cpu";
 				reg = <1>;
 			};
 		};
 	};
-
 	clocks {
 		xo: xo {
 			compatible = "fixed-clock";
 			clock-frequency = <19200000>;
 			#clock-cells = <0>;
 		};
-
 		sleep_clk: sleep_clk {
 			compatible = "fixed-clock";
 			clock-frequency = <32000>;
 			#clock-cells = <0>;
 		};
 	};
-
 	timer {
 		compatible = "arm,armv8-timer";
 		interrupts = <1 2 0xf08>,
@@ -311,7 +271,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			     <1 4 0xf08>,
 			     <1 1 0xf08>;
 	};
-
 	aliases {
 		serial0 = &blsp1_uart5;
 		led-boot = &led_system_yellow;
@@ -320,15 +279,12 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 		led-upgrade = &led_system_yellow;
 		label-mac-device = &dp2;
 	};
-
 	chosen {
 		stdout-path = "serial0:115200n8";
 		bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
 	};
-
 	keys {
 		compatible = "gpio-keys";
-
 		reset {
 			label = "reset";
 			gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
@@ -336,27 +292,21 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 		};
 	};
 };
-
 &blsp1_uart5 {
 	status = "okay";
 };
-
 &prng {
 	status = "okay";
 };
-
 &cryptobam {
 	status = "okay";
 };
-
 &crypto {
 	status = "okay";
 };
-
 &qpic_bam {
 	status = "okay";
 };
-
 &tlmm {
 	mdio_pins: mdio-pins {
 		mdc {
@@ -365,7 +315,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			drive-strength = <8>;
 			bias-pull-up;
 		};
-
 		mdio {
 			pins = "gpio69";
 			function = "mdio";
@@ -374,112 +323,91 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 		};
 	};
 };
-
 &qpic_nand {
 	status = "okay";
-
 	nand@0 {
 		reg = <0>;
 		nand-ecc-strength = <4>;
 		nand-ecc-step-size = <512>;
 		nand-bus-width = <8>;
-
 		partitions {
 			compatible = "fixed-partitions";
 			#address-cells = <1>;
 			#size-cells = <1>;
-
 			partition@0 {
 				label = "0:sbl1";
 				reg = <0x0 0x100000>;
 				read-only;
 			};
-
 			partition@100000 {
 				label = "0:mibib";
 				reg = <0x100000 0x100000>;
 				read-only;
 			};
-
 			partition@200000 {
 				label = "0:qsee";
 				reg = <0x200000 0x300000>;
 				read-only;
 			};
-
 			partition@500000 {
 				label = "0:devcfg";
 				reg = <0x500000 0x80000>;
 				read-only;
 			};
-
 			partition@580000 {
 				label = "0:rpm";
 				reg = <0x580000 0x80000>;
 				read-only;
 			};
-
 			partition@600000 {
 				label = "0:cdt";
 				reg = <0x600000 0x80000>;
 				read-only;
 			};
-
 			partition@680000 {
 				label = "0:appsblenv";
 				reg = <0x680000 0x80000>;
 			};
-
 			partition@700000 {
 				label = "0:appsbl";
 				reg = <0x700000 0x100000>;
 				read-only;
 			};
-
 			partition@800000 {
 				label = "0:art";
 				reg = <0x800000 0x80000>;
 				read-only;
-
 				nvmem-layout {
 					compatible = "fixed-layout";
 					#address-cells = <1>;
 					#size-cells = <1>;
-
 					macaddr_dp2: macaddr@6 {
 						reg = <0x6 0x6>;
 					};
-
 					macaddr_dp3: macaddr@c {
 						reg = <0xc 0x6>;
 					};
-
 					macaddr_dp4: macaddr@12 {
 						reg = <0x12 0x6>;
 					};
-
 					macaddr_dp5: macaddr@18 {
 						reg = <0x18 0x6>;
 					};
 				};
 			};
-
 			partition@880000 {
 				label = "bdata";
 				reg = <0x880000 0x80000>;
 			};
-
 			partition@900000 {
 				label = "pstore";
 				reg = <0x900000 0x100000>;
 			};
-
 			partition@a00000 {
 				label = "rootfs";
 				reg = <0xa00000 0xf000000>;
 				compatible = "openwrt,ubi";
 			};
-
 			partition@fa00000 {
 				label = "rsvd0";
 				reg = <0xfa00000 0x80000>;
@@ -488,47 +416,39 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 		};
 	};
 };
-
 &mdio {
 	status = "okay";
 	pinctrl-0 = <&mdio_pins>;
 	pinctrl-names = "default";
 	reset-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
-
 	ethernet-phy-package@0 {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		compatible = "qcom,qca8075-package";
 		reg = <0>;
-
 		qca8075_1: ethernet-phy@1 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <1>;
 		};
-
 		qca8075_2: ethernet-phy@2 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <2>;
 		};
-
 		qca8075_3: ethernet-phy@3 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <3>;
 		};
-
 		qca8075_4: ethernet-phy@4 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <4>;
 		};
 	};
 };
-
 &switch {
 	status = "okay";
 	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>;
 	switch_wan_bmp = <ESS_PORT2>;
 	switch_mac_mode = <MAC_MODE_PSGMII>;
-
 	qcom,port_phyinfo {
 		port@2 {
 			port_id = <2>;
@@ -548,11 +468,9 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 		};
 	};
 };
-
 &edma {
 	status = "okay";
 };
-
 &dp2 {
 	status = "okay";
 	phy-handle = <&qca8075_1>;
@@ -560,7 +478,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 	nvmem-cells = <&macaddr_dp2>;
 	nvmem-cell-names = "mac-address";
 };
-
 &dp3 {
 	status = "okay";
 	phy-handle = <&qca8075_2>;
@@ -568,7 +485,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 	nvmem-cells = <&macaddr_dp3>;
 	nvmem-cell-names = "mac-address";
 };
-
 &dp4 {
 	status = "okay";
 	phy-handle = <&qca8075_3>;
@@ -576,7 +492,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 	nvmem-cells = <&macaddr_dp4>;
 	nvmem-cell-names = "mac-address";
 };
-
 &dp5 {
 	status = "okay";
 	phy-handle = <&qca8075_4>;
@@ -584,7 +499,6 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 	nvmem-cells = <&macaddr_dp5>;
 	nvmem-cell-names = "mac-address";
 };
-
 &wifi {
 	status = "okay";
 	qcom,ath11k-fw-memory-mode = <2>;
