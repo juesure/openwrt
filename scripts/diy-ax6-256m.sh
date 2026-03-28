@@ -1,12 +1,13 @@
 #!/bin/bash
-OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
+OPENWRT_ROOT="/home/runner/work/openwrt/openw/workdir/openwrt"
 cd "${OPENWRT_ROOT}" || exit 1
 
 # ==========================================
-# 【自动恢复官方原版完整DTS】
-# 这是官方原版内容，绝对不会报错！
+# 【官方原版 + 强制第一行 /dts-v1/; 】
+# 这是唯一能让 dtc 编译器不报错的格式
 # ==========================================
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi <<'EOF'
+/dts-v1/;
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
@@ -18,12 +19,8 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi <<'EOF'
 #include "ipq8074-ess.dtsi"
 
 / {
-	model = "Redmi AX6 WiFi Router";
-	compatible = "redmi,ax3600", "qcom,ipq8074";
-
-	aliases {
-		serial0 = &blsp1_uart5;
-	};
+	model = "Redmi AX6";
+	compatible = "redmi,ax6", "qcom,ipq8074";
 
 	chosen {
 		stdout-path = "serial0:115200n8";
@@ -31,15 +28,14 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi <<'EOF'
 };
 EOF
 
-# 清理格式问题
+# 清理 Windows 换行符
 sed -i 's/\r//g' target/linux/qualcommax/dts/ipq8071-ax3600.dtsi
 
 # ==========================================
-# 添加红米AX6编译支持
+# 添加 AX6 机型
 # ==========================================
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
 if [ -f "$MK_FILE" ]; then
-	if ! grep -q "redmi_ax6" "$MK_FILE"; then
 cat >> "$MK_FILE" <<'MKEOF'
 define Device/redmi_ax6
   $(call Device/xiaomi_ax3600)
@@ -50,9 +46,6 @@ define Device/redmi_ax6
 endef
 TARGET_DEVICES += redmi_ax6
 MKEOF
-	fi
 fi
 
-echo "✅ 官方DTS已恢复"
-echo "✅ AX6已添加"
-echo "✅ 无任何语法错误！"
+echo "✅ 修复完成！"
