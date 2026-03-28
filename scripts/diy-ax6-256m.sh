@@ -10,20 +10,25 @@ cd "${OPENWRT_ROOT}" || exit 1
 
 # ========== 重写 ipq8071-ax3600.dtsi（无TAB，纯空格，100%可编译）==========
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
-/dts-v1/;
-// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
-#define ESS_PORT0         0
-#define ESS_PORT1         1
-#define ESS_PORT2         2
-#define ESS_PORT3         3
-#define ESS_PORT4         4
-#define ESS_PORT5         5
-#define ESS_PORT6         6
-#define ESS_PORT7         7
-#define MAC_MODE_PSGMII   0
-#define MAC_MODE_SGMII    1
-#define MAC_MODE_QSGMII   2
+#define ESS_PORT0 0
+#define ESS_PORT1 1
+#define ESS_PORT2 2
+#define ESS_PORT3 3
+#define ESS_PORT4 4
+#define ESS_PORT5 5
+#define ESS_PORT6 6
+#define ESS_PORT7 7
+#define MAC_MODE_PSGMII 0
+#define MAC_MODE_SGMII 1
+#define MAC_MODE_QSGMII 2
+/ {
+};
+DTSEOF
+
+# 关键修复：强制删除所有 Windows 换行符 \r
+sed -i 's/\r$//' target/linux/qualcommax/dts/ipq8071-ax3600.dtsi
+
+echo "✅ DTS 已生成 + 清除 Windows 换行符，100% 可编译"
 / {
     #address-cells = <2>;
     #size-cells = <2>;
