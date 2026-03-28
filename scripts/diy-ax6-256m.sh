@@ -8,11 +8,71 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 创建正确的 ipq807x.mk ==========
-echo "创建 ipq807x.mk..."
+# ========== 设置正确的 DTS 路径 ==========
+DTS_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/"
+mkdir -p "$DTS_DIR"
+
+# ========== 创建 ipq8074-ess.dtsi（如果不存在）==========
+if [ ! -f "${DTS_DIR}ipq8074-ess.dtsi" ]; then
+    echo "创建 ipq8074-ess.dtsi..."
+    cat > "${DTS_DIR}ipq8074-ess.dtsi" << 'EOF'
+#define ESS_PORT0			0
+#define ESS_PORT1			1
+#define ESS_PORT2			2
+#define ESS_PORT3			3
+#define ESS_PORT4			4
+#define ESS_PORT5			5
+#define ESS_PORT6			6
+#define ESS_PORT7			7
+
+#define MAC_MODE_PSGMII		0
+#define MAC_MODE_SGMII		1
+#define MAC_MODE_QSGMII		2
+EOF
+    echo "✅ ipq8074-ess.dtsi 创建成功"
+fi
+
+# ========== 修改 ipq8071-ax3600.dtsi ==========
+DTS_FILE="${DTS_DIR}ipq8071-ax3600.dtsi"
+
+if [ -f "$DTS_FILE" ]; then
+    echo "修改 $DTS_FILE..."
+    
+    # 注释掉第4行的 include
+    sed -i '4s|#include "ipq8074-512m.dtsi"|/* #include "ipq8074-512m.dtsi" */|' "$DTS_FILE"
+    
+    # 修改 rootfs 分区大小
+    sed -i 's/reg = <0xa00000 0xf000000>/reg = <0xa00000 0x10000000>/' "$DTS_FILE"
+    
+    # 修改 bootargs
+    sed -i 's|root=/dev/ubiblock0_0|root=/dev/ubiblock0_1|' "$DTS_FILE"
+    
+    # 确保包含 ipq8074-ess.dtsi
+    if ! grep -q '#include "ipq8074-ess.dtsi"' "$DTS_FILE"; then
+        sed -i '/#include <dt-bindings\/input\/input.h>/a #include "ipq8074-ess.dtsi"' "$DTS_FILE"
+    fi
+    
+    echo "✅ DTS 文件已修改"
+else
+    echo "❌ 找不到 $DTS_FILE"
+    exit 1
+fi
+
+# ========== 修改 ipq8071-ax6.dts ==========
+AX6_DTS="${DTS_DIR}ipq8071-ax6.dts"
+if [ -f "$AX6_DTS" ]; then
+    # 添加 WiFi 内存模式
+    if ! grep -q "qcom,ath11k-fw-memory-mode" "$AX6_DTS"; then
+        sed -i '/&wifi {/a\	qcom,ath11k-fw-memory-mode = <2>;' "$AX6_DTS"
+    fi
+    echo "✅ ipq8071-ax6.dts 已修改"
+fi
+
+# ========== 创建 ipq807x.mk ==========
+IPQ807X_MK="target/linux/qualcommax/image/ipq807x.mk"
 mkdir -p target/linux/qualcommax/image/
 
-cat > target/linux/qualcommax/image/ipq807x.mk << 'MKEOF'
+cat > "$IPQ807X_MK" << 'MKEOF'
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
@@ -115,7 +175,8 @@ MKEOF
 echo "✅ ipq807x.mk 创建成功"
 
 # ========== 创建 common.mk ==========
-cat > target/linux/qualcommax/image/common.mk << 'CMKEOF'
+COMMON_MK="target/linux/qualcommax/image/common.mk"
+cat > "$COMMON_MK" << 'CMKEOF'
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
@@ -143,28 +204,6 @@ endef
 CMKEOF
 
 echo "✅ common.mk 创建成功"
-
-# ========== 修改 DTS 文件 ==========
-DTS_DIR="target/linux/qualcommax/dts/"
-mkdir -p "$DTS_DIR"
-
-# 创建 ipq8074-ess.dtsi（定义 ESS_PORT 和 MAC_MODE）
-cat > "${DTS_DIR}ipq8074-ess.dtsi" << 'EOF'
-#define ESS_PORT0			0
-#define ESS_PORT1			1
-#define ESS_PORT2			2
-#define ESS_PORT3			3
-#define ESS_PORT4			4
-#define ESS_PORT5			5
-#define ESS_PORT6			6
-#define ESS_PORT7			7
-
-#define MAC_MODE_PSGMII		0
-#define MAC_MODE_SGMII		1
-#define MAC_MODE_QSGMII		2
-EOF
-
-echo "✅ ipq8074-ess.dtsi 创建成功"
 
 # ========== 清理联发科 ==========
 if [ -f ".config" ]; then
