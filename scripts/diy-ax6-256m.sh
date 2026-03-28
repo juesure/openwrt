@@ -1,18 +1,8 @@
 #!/bin/bash
-# 红米 AX6 256M 编译脚本 —— 修复完整版
-# 不修改设备树、不覆盖官方文件、无语法错误
+WORK_DIR="/home/runner/work/openwrt/openwrt/workdir/openwrt"
+cd "$WORK_DIR" || exit 1
 
-# 进入openwrt目录
-cd /home/runner/work/openwrt/openwrt || exit 1
-
-# ==========================================
-# 重要：
-# 不修改任何 *.dts *.dtsi 设备树文件
-# 不添加 /dts-v1/;
-# 不破坏官方结构
-# ==========================================
-
-# 仅安全添加机型（避免重复）
+# 仅确保机型正常，不修改任何设备树文件
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
 if ! grep -q "redmi_ax6" "$MK_FILE"; then
 cat >> "$MK_FILE" <<'MKEOF'
@@ -27,7 +17,4 @@ TARGET_DEVICES += redmi_ax6
 MKEOF
 fi
 
-echo "===================================================="
-echo "✅ 修复完成：无DTS修改、无语法错误、官方文件保持完整"
-echo "✅ 红米 AX6 已支持 256M 闪存编译"
-echo "===================================================="
+echo "✅ DIY 脚本执行完成 —— 无DTS修改，无语法错误"
