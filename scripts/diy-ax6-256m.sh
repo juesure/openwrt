@@ -25,14 +25,10 @@ cat > target/linux/qualcommax/dts/ipq8074-ess.dtsi << 'EOF'
 #define MAC_MODE_QSGMII		2
 EOF
 
-# ========== 2. 重写 ipq8071-ax3600.dtsi（无空行）==========
+# ========== 2. 重写 ipq8071-ax3600.dtsi（最小化，只保留必要内容）==========
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
-#include <dt-bindings/clock/qcom,gcc-ipq8074.h>
-#include <dt-bindings/reset/qcom,gcc-ipq8074.h>
-#include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/input/input.h>
 #include "ipq8074-ess.dtsi"
 / {
 	#address-cells = <2>;
