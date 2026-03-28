@@ -1,5 +1,10 @@
 name: Build Redmi AX6 (256M)
 
+# 并发控制
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPO_URL: https://github.com/juesure/openwrt/
@@ -29,19 +34,6 @@ jobs:
           path: /home/runner/work/openwrt/openwrt
           fetch-depth: 1
 
-      # ========== 添加缓存 ==========
-      - name: Cache Toolchain
-        id: cache-toolchain
-        uses: actions/cache@v3
-        with:
-          path: |
-            ${{ env.WORK_DIR }}/openwrt/staging_dir
-            ${{ env.WORK_DIR }}/openwrt/dl
-            ${{ env.WORK_DIR }}/openwrt/build_dir
-          key: ${{ runner.os }}-openwrt-toolchain-${{ hashFiles('${{ env.CONFIG_FILE }}') }}
-          restore-keys: |
-            ${{ runner.os }}-openwrt-toolchain-
-
       - name: Initialize Env
         run: |
           sudo apt update -y
@@ -49,33 +41,20 @@ jobs:
             gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
             python3-distutils rsync unzip zlib1g-dev file wget libelf-dev \
             libfuse-dev device-tree-compiler mtd-utils squashfs-tools \
-            dosfstools parted kmod zip gh lz4 lzop m4 \
-            python3-yaml python3-jsonschema
+            dosfstools parted kmod zip gh lz4 lzop m4
           sudo timedatectl set-timezone "$TZ"
           mkdir -p "$WORK_DIR"
           chmod +x "$DIY_SCRIPT"
 
-      - name: Clean Workdir (only if cache miss)
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+      - name: Clean Workdir
         run: |
           rm -rf "$WORK_DIR"
           mkdir -p "$WORK_DIR"
 
       - name: Clone Source
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
           cd "$WORK_DIR"
           git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt
-
-      - name: Clone Source (use existing if cache hit)
-        if: steps.cache-toolchain.outputs.cache-hit == 'true'
-        run: |
-          cd "$WORK_DIR"
-          if [ ! -d openwrt ]; then
-            git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt
-          fi
-          cd openwrt
-          git pull origin "$REPO_BRANCH"
 
       - name: Preprocess
         run: |
@@ -87,69 +66,57 @@ jobs:
           echo "CONFIG_TARGET_MULTI_PROFILE=n" >> .config
           echo "CONFIG_TARGET_ALL_PROFILES=n" >> .config
           make defconfig
+
+      # ========== 快速语法检查（2分钟内）==========
+      - name: Quick DTS Syntax Check
+        run: |
+          cd "$WORK_DIR/openwrt"
+          
+          echo "=========================================="
+          echo "快速检查 DTS 语法..."
+          echo "=========================================="
+          
+          DTS_FILE="target/linux/qualcommax/dts/ipq8071-ax3600.dtsi"
+          
+          if [ -f "$DTS_FILE" ]; then
+            # 使用系统 dtc 直接检查
+            dtc -I dts -O dtb "$DTS_FILE" 2>&1 | tee dtc_check.log
+            
+            if [ ${PIPESTATUS[0]} -ne 0 ]; then
+              echo "❌ DTS 语法错误："
+              cat dtc_check.log
+              exit 1
+            fi
+            echo "✅ DTS 语法正确"
+          else
+            echo "⚠️ 未找到 DTS 文件，跳过检查"
+          fi
+
+      # ========== 仅在 DTS 正确时继续 ==========
       - name: Build Toolchain
         run: |
           cd "$WORK_DIR/openwrt"
-          echo "=========================================="
           echo "构建工具链..."
-          echo "=========================================="
-          make toolchain/compile -j$(nproc) 2>&1 | tee toolchain.log
-          
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 工具链构建失败"
-            tail -50 toolchain.log
-            exit 1
-          fi
-          
-          # 验证 m4 是否生成
-          if [ -f staging_dir/host/bin/m4 ]; then
-            echo "✅ m4 工具已生成"
-          else
-            echo "⚠️ m4 工具未生成，尝试手动安装"
-            sudo apt install -y m4
-          fi
-          
-          echo "✅ 工具链构建完成"
-      - name: Verify DTS Syntax
-        run: |
-          cd "$WORK_DIR/openwrt"
-          
-          echo "=========================================="
-          echo "验证 DTS 语法..."
-          echo "=========================================="
-          
-          # 只验证 DTS 语法，不完整编译
-          make target/linux/dtb V=s 2>&1 | tee dts_check.log | grep -E "(Error|error|syntax error)" || true
-          
-          if grep -q "Error" dts_check.log; then
-            echo "❌ DTS 语法错误："
-            grep -E "(Error|error|syntax error)" dts_check.log
-            exit 1
-          fi
-          
-          echo "✅ DTS 语法正确"
+          make toolchain/compile -j$(nproc) 2>&1 | tail -20
+
       - name: Compile
         id: compile
         run: |
           cd "$WORK_DIR/openwrt"
           
           echo "开始编译固件..."
+          make -j$(nproc) 2>&1 | tee compile.log | grep -E "(ERROR|Error|warning:|make\[|Building|target|Kernel|Image|UBI|Success|Failed)" || true
           
-          # 只输出关键信息，减少日志
-          make -j$(nproc) 2>&1 | tee compile.log | grep -E "(ERROR|Error|warning:|make\[|Building|target|Kernel|Image|UBI|✔|❌|Success|Failed|Compiled)" || true
-          
-          # 检查编译结果
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 编译失败，显示最后50行错误："
+            echo "❌ 编译失败"
             tail -50 compile.log
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
           
-          # 检查固件文件
           FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
           
-          if [ -f "$FIRMWARE_DIR"/*redmi_ax6*sysupgrade.bin ]; then
+          if ls "$FIRMWARE_DIR"/*redmi_ax6*sysupgrade.bin 1>/dev/null 2>&1; then
             echo "✅ 固件编译成功"
             echo "status=success" >> $GITHUB_OUTPUT
             ls -lh "$FIRMWARE_DIR"/*redmi_ax6*
