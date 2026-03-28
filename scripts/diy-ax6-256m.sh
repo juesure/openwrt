@@ -8,89 +8,78 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 自动查找 DTS 文件路径 ==========
-echo "查找 DTS 文件..."
+# ========== 创建正确的 ipq807x.mk ==========
+echo "创建 ipq807x.mk..."
+mkdir -p target/linux/qualcommax/image/
 
-# 可能的 DTS 路径
-DTS_PATHS=(
-    "target/linux/qualcommax/dts/ipq8071-ax3600.dtsi"
-    "target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8071-ax3600.dtsi"
-    "target/linux/qualcommax/dts/ipq8071-ax3600.dtsi"
-)
+cat > target/linux/qualcommax/image/ipq807x.mk << 'MKEOF'
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
 
-DTS_FILE=""
-for path in "${DTS_PATHS[@]}"; do
-    if [ -f "$path" ]; then
-        DTS_FILE="$path"
-        echo "✅ 找到 DTS 文件: $path"
-        break
-    fi
-done
+include ./common.mk
 
-if [ -z "$DTS_FILE" ]; then
-    echo "❌ 找不到 ipq8071-ax3600.dtsi"
-    echo "查找目录:"
-    find target -name "ipq8071-ax3600.dtsi" 2>/dev/null || echo "未找到"
-    exit 1
-fi
+define Build/asus-fake-ramdisk
+	rm -rf $(KDIR)/tmp/fakerd
+	dd if=/dev/zero bs=32 count=1 > $(KDIR)/tmp/fakerd
+endef
 
-# ========== 修改 DTS 文件 ==========
-echo "修改 $DTS_FILE..."
+define Build/asus-fake-rootfs
+	$(eval comp=$(word 1,$(1)))
+	$(eval filepath=$(word 2,$(1)))
+	$(eval filecont=$(word 3,$(1)))
+	rm -rf $(KDIR)/tmp/fakefs $(KDIR)/tmp/fakehsqs
+	mkdir -p $(KDIR)/tmp/fakefs/$$(dirname $(filepath))
+	echo '$(filecont)' > $(KDIR)/tmp/fakefs/$(filepath)
+	$(STAGING_DIR_HOST)/bin/mksquashfs4 $(KDIR)/tmp/fakefs $(KDIR)/tmp/fakehsqs -comp $(comp) \
+		-b 4096 -no-exports -no-sparse -no-xattrs -all-root -noappend \
+		$(wordlist 4,$(words $(1)),$(1))
+endef
 
-# 1. 注释掉第4行的 include
-sed -i '4s|#include "ipq8074-512m.dtsi"|/* #include "ipq8074-512m.dtsi" */|' "$DTS_FILE"
+define Build/asus-trx
+	$(STAGING_DIR_HOST)/bin/asusuimage $(wordlist 1,$(words $(1)),$(1)) -i $@ -o $@.new
+	mv $@.new $@
+endef
 
-# 2. 修改 rootfs 分区大小
-sed -i 's/reg = <0xa00000 0xf000000>/reg = <0xa00000 0x10000000>/' "$DTS_FILE"
+define Build/netgear-rbx750-qsdk-ipq-factory
+	$(CP) $(FLASH_SCRIPT) $(KDIR_TMP)/
+	echo "VERSION : V8.0.0.0_$(LINUX_VERSION)" > $@.metadata
+	echo "MODEL_ID : $(DEVICE_MODEL)" >> $@.metadata
+	$(TOPDIR)/scripts/mkits-qsdk-ipq-image.sh $@.its $(FLASH_SCRIPT) txt $@.metadata ubi $@
+	PATH=$(LINUX_DIR)/scripts/dtc:$(PATH) mkimage -f $@.its $@.new
+	@mv $@.new $@
+endef
 
-# 3. 修改 bootargs
-sed -i 's|root=/dev/ubiblock0_0|root=/dev/ubiblock0_1|' "$DTS_FILE"
+define Build/wax6xx-netgear-tar
+	mkdir $@.tmp
+	mv $@ $@.tmp/nand-ipq807x-apps.img
+	md5sum $@.tmp/nand-ipq807x-apps.img | cut -c 1-32 > $@.tmp/nand-ipq807x-apps.md5sum
+	echo $(DEVICE_MODEL) > $@.tmp/metadata.txt
+	echo $(DEVICE_MODEL)"_V99.9.9.9" > $@.tmp/version
+	tar -C $@.tmp/ -cf $@ .
+	rm -rf $@.tmp
+endef
 
-echo "✅ DTS 文件已修改"
+define Build/zyxel-nwax10ax-fit
+	$(TOPDIR)/scripts/mkits-zyxel-fit-filogic.sh \
+		$@.its $@ "$(ZYXEL_MODEL_ID) ff ff ff ff ff ff ff ff"
+	PATH=$(LINUX_DIR)/scripts/dtc:$(PATH) mkimage -f $@.its $@.new
+	@mv $@.new $@
+endef
 
-# ========== 查找并修改 ipq8071-ax6.dts ==========
-AX6_PATHS=(
-    "target/linux/qualcommax/dts/ipq8071-ax6.dts"
-    "target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8071-ax6.dts"
-)
-
-AX6_DTS=""
-for path in "${AX6_PATHS[@]}"; do
-    if [ -f "$path" ]; then
-        AX6_DTS="$path"
-        echo "✅ 找到 AX6 DTS 文件: $path"
-        break
-    fi
-done
-
-if [ -n "$AX6_DTS" ]; then
-    if ! grep -q "qcom,ath11k-fw-memory-mode" "$AX6_DTS"; then
-        sed -i '/&wifi {/a\	qcom,ath11k-fw-memory-mode = <2>;' "$AX6_DTS"
-    fi
-    echo "✅ ipq8071-ax6.dts 已修改"
-fi
-
-# ========== 查找并修改 ipq807x.mk ==========
-IPQ807X_PATHS=(
-    "target/linux/qualcommax/image/ipq807x.mk"
-)
-
-IPQ807X_MK=""
-for path in "${IPQ807X_PATHS[@]}"; do
-    if [ -f "$path" ]; then
-        IPQ807X_MK="$path"
-        echo "✅ 找到 ipq807x.mk: $path"
-        break
-    fi
-done
-
-if [ -n "$IPQ807X_MK" ]; then
-    # 修改 xiaomi_ax3600 的 SOC
-    sed -i 's/SOC := ipq8074/SOC := ipq8071/' "$IPQ807X_MK"
-    
-    # 检查 redmi_ax6 配置
-    if ! grep -q "define Device/redmi_ax6" "$IPQ807X_MK"; then
-        cat >> "$IPQ807X_MK" << 'MKEOF'
+define Device/xiaomi_ax3600
+	$(call Device/FitImage)
+	$(call Device/UbiFit)
+	DEVICE_VENDOR := Xiaomi
+	DEVICE_MODEL := AX3600
+	BLOCKSIZE := 128k
+	PAGESIZE := 2048
+	DEVICE_DTS_CONFIG := config@ac04
+	SOC := ipq8071
+	KERNEL_SIZE := 36608k
+	DEVICE_PACKAGES := ipq-wifi-xiaomi_ax3600
+endef
+TARGET_DEVICES += xiaomi_ax3600
 
 define Device/redmi_ax6
 	$(call Device/xiaomi_ax3600)
@@ -122,9 +111,60 @@ define Device/redmi_ax6
 endef
 TARGET_DEVICES += redmi_ax6
 MKEOF
-    fi
-    echo "✅ ipq807x.mk 已修改"
-fi
+
+echo "✅ ipq807x.mk 创建成功"
+
+# ========== 创建 common.mk ==========
+cat > target/linux/qualcommax/image/common.mk << 'CMKEOF'
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
+
+# Common build definitions for IPQ807x
+
+define Build/append-dtb
+	cat $(KDIR)/image-$(DEVICE_DTS).dtb >> $@
+endef
+
+define Build/append-rootfs
+	cat $(KDIR)/rootfs.$(1) >> $@
+endef
+
+define Build/append-ubi
+	cat $(KDIR)/rootfs.ubi >> $@
+endef
+
+define Build/check-size
+	@if [ $$(stat -c%s $@) -gt $(1) ]; then \
+		echo "Error: $@ exceeds $(1) bytes"; \
+		exit 1; \
+	fi
+endef
+CMKEOF
+
+echo "✅ common.mk 创建成功"
+
+# ========== 修改 DTS 文件 ==========
+DTS_DIR="target/linux/qualcommax/dts/"
+mkdir -p "$DTS_DIR"
+
+# 创建 ipq8074-ess.dtsi（定义 ESS_PORT 和 MAC_MODE）
+cat > "${DTS_DIR}ipq8074-ess.dtsi" << 'EOF'
+#define ESS_PORT0			0
+#define ESS_PORT1			1
+#define ESS_PORT2			2
+#define ESS_PORT3			3
+#define ESS_PORT4			4
+#define ESS_PORT5			5
+#define ESS_PORT6			6
+#define ESS_PORT7			7
+
+#define MAC_MODE_PSGMII		0
+#define MAC_MODE_SGMII		1
+#define MAC_MODE_QSGMII		2
+EOF
+
+echo "✅ ipq8074-ess.dtsi 创建成功"
 
 # ========== 清理联发科 ==========
 if [ -f ".config" ]; then
