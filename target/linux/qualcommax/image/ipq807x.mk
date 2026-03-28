@@ -65,7 +65,6 @@ define Device/xiaomi_ax3600
 	DEVICE_PACKAGES := ipq-wifi-xiaomi_ax3600
 endef
 TARGET_DEVICES += xiaomi_ax3600
-
 define Device/redmi_ax6
 	$(call Device/xiaomi_ax3600)
 	DEVICE_VENDOR := Redmi
@@ -95,3 +94,4 @@ define Device/redmi_ax6
 		block-mount
 endef
 TARGET_DEVICES += redmi_ax6
+
