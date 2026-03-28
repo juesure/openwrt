@@ -8,504 +8,504 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 重写 ipq8071-ax3600.dtsi（无空行，纯英文）==========
+# ========== 重写 ipq8071-ax3600.dtsi（无TAB，纯空格，100%可编译）==========
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
-#define ESS_PORT0		0
-#define ESS_PORT1		1
-#define ESS_PORT2		2
-#define ESS_PORT3		3
-#define ESS_PORT4		4
-#define ESS_PORT5		5
-#define ESS_PORT6		6
-#define ESS_PORT7		7
-#define MAC_MODE_PSGMII		0
-#define MAC_MODE_SGMII		1
-#define MAC_MODE_QSGMII		2
+#define ESS_PORT0         0
+#define ESS_PORT1         1
+#define ESS_PORT2         2
+#define ESS_PORT3         3
+#define ESS_PORT4         4
+#define ESS_PORT5         5
+#define ESS_PORT6         6
+#define ESS_PORT7         7
+#define MAC_MODE_PSGMII   0
+#define MAC_MODE_SGMII    1
+#define MAC_MODE_QSGMII   2
 / {
-	#address-cells = <2>;
-	#size-cells = <2>;
-	memory@40000000 {
-		device_type = "memory";
-		reg = <0x0 0x40000000 0x0 0x20000000>;
-	};
-	reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-		nss_reserved: nss@40000000 {
-			reg = <0x0 0x40000000 0x0 0x1000000>;
-			no-map;
-		};
-		tzapp: tzapp@4a400000 {
-			reg = <0x0 0x4a400000 0x0 0x100000>;
-			no-map;
-		};
-		bootloader: bootloader@4a600000 {
-			reg = <0x0 0x4a600000 0x0 0x400000>;
-			no-map;
-		};
-		sbl: sbl@4aa00000 {
-			reg = <0x0 0x4aa00000 0x0 0x100000>;
-			no-map;
-		};
-		smem: smem@4ab00000 {
-			reg = <0x0 0x4ab00000 0x0 0x100000>;
-			no-map;
-		};
-		memory@4ac00000 {
-			reg = <0x0 0x4ac00000 0x0 0x400000>;
-			no-map;
-		};
-		wcnss: wcnss@4b000000 {
-			reg = <0x0 0x4b000000 0x0 0x3700000>;
-			no-map;
-		};
-		q6_etr_dump: q6_etr_dump@4e700000 {
-			reg = <0x0 0x4e700000 0x0 0x100000>;
-			no-map;
-		};
-		m3_dump: m3_dump@4e800000 {
-			reg = <0x0 0x4e800000 0x0 0x100000>;
-			no-map;
-		};
-	};
-	cpus {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		cpu@0 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x0>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-		cpu@1 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x1>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-		cpu@2 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x2>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-		cpu@3 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x3>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-		L2_0: l2-cache {
-			compatible = "cache";
-			cache-level = <2>;
-		};
-	};
-	psci {
-		compatible = "arm,psci-1.0";
-		method = "smc";
-	};
-	soc: soc@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges = <0 0 0 0xffffffff>;
-		compatible = "simple-bus";
-		intc: interrupt-controller@b000000 {
-			compatible = "qcom,msm-qgic2";
-			interrupt-controller;
-			#interrupt-cells = <3>;
-			reg = <0x0b000000 0x1000>,
-			      <0x0b002000 0x1000>;
-		};
-		timer@b120000 {
-			compatible = "arm,armv7-timer-mem";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			ranges;
-			reg = <0x0b120000 0x1000>;
-			clock-frequency = <19200000>;
-			frame@b120000 {
-				frame-number = <0>;
-				interrupts = <0 8 4>,
-					     <0 7 4>;
-				reg = <0x0b121000 0x1000>,
-				      <0x0b122000 0x1000>;
-			};
-		};
-		apcs_glb: mailbox@b111000 {
-			compatible = "qcom,ipq6018-apcs-apps-global";
-			reg = <0x0b111000 0x1000>;
-			#clock-cells = <1>;
-			clocks = <&xo>;
-			clock-names = "xo";
-		};
-		blsp1_uart5: serial@78b3000 {
-			compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
-			reg = <0x078b3000 0x200>;
-			interrupts = <0 308 4>;
-			clocks = <&gcc GCC_BLSP1_UART3_APPS_CLK>,
-				 <&gcc GCC_BLSP1_AHB_CLK>;
-			clock-names = "core", "iface";
-			status = "disabled";
-		};
-		prng: rng@22000 {
-			compatible = "qcom,prng";
-			reg = <0x00022000 0x200>;
-			clocks = <&gcc GCC_PRNG_AHB_CLK>;
-			clock-names = "core";
-			status = "disabled";
-		};
-		cryptobam: dma-controller@704000 {
-			compatible = "qcom,bam-v1.7.0";
-			reg = <0x00704000 0x20000>;
-			interrupts = <0 207 4>;
-			#dma-cells = <1>;
-			qcom,ee = <1>;
-			qcom,controlled-remotely;
-			status = "disabled";
-		};
-		crypto: crypto@73a000 {
-			compatible = "qcom,crypto-v5.1";
-			reg = <0x0073a000 0x6000>;
-			clocks = <&gcc GCC_CRYPTO_AHB_CLK>,
-				 <&gcc GCC_CRYPTO_AXI_CLK>,
-				 <&gcc GCC_CRYPTO_CLK>;
-			clock-names = "iface", "bus", "core";
-			dmas = <&cryptobam 2>, <&cryptobam 3>;
-			dma-names = "rx", "tx";
-			status = "disabled";
-		};
-		qpic_bam: dma-controller@7984000 {
-			compatible = "qcom,bam-v1.7.0";
-			reg = <0x07984000 0x1a000>;
-			interrupts = <0 286 4>;
-			#dma-cells = <1>;
-			qcom,ee = <1>;
-			qcom,controlled-remotely;
-			status = "disabled";
-		};
-		qpic_nand: nand-controller@79b0000 {
-			compatible = "qcom,ipq8074-nand";
-			reg = <0x079b0000 0x10000>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			clocks = <&gcc GCC_QPIC_CLK>,
-				 <&gcc GCC_QPIC_AHB_CLK>;
-			clock-names = "core", "aon";
-			dmas = <&qpic_bam 0>,
-			       <&qpic_bam 1>,
-			       <&qpic_bam 2>;
-			dma-names = "tx", "rx", "cmd";
-			status = "disabled";
-		};
-		mdio: mdio@90000 {
-			compatible = "qcom,ipq8074-mdio";
-			reg = <0x00090000 0x64>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-		};
-		edma: edma@3a001000 {
-			compatible = "qcom,ipq8074-edma";
-			reg = <0x3a001000 0x8000>;
-			reg-names = "edma";
-			interrupts = <0 189 4>,
-				     <0 190 4>,
-				     <0 191 4>,
-				     <0 192 4>;
-			interrupt-names = "rx0", "rx1", "tx0", "tx1";
-			clocks = <&gcc GCC_EDMA_CLK>,
-				 <&gcc GCC_EDMA_AXI_CLK>;
-			clock-names = "core", "axi";
-			resets = <&gcc GCC_EDMA_RESET>;
-			reset-names = "edma";
-			status = "disabled";
-		};
-		ess-switch@3a000000 {
-			compatible = "qcom,ipq8074-ess-switch";
-			reg = <0x3a000000 0x1000000>;
-			reg-names = "core";
-			interrupts-extended = <&intc 0 188 4>;
-			interrupt-names = "macirq";
-			clocks = <&gcc GCC_CMN_12GPLL_AHB_CLK>,
-				 <&gcc GCC_CMN_12GPLL_SYS_CLK>;
-			clock-names = "ahb", "sys";
-			resets = <&gcc GCC_ESS_RESET>;
-			reset-names = "ess";
-			qcom,mdio = <&mdio>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-			switch-cpu@0 {
-				compatible = "qcom,ess-switch-cpu";
-				reg = <0>;
-			};
-			switch-cpu@1 {
-				compatible = "qcom,ess-switch-cpu";
-				reg = <1>;
-			};
-		};
-	};
-	clocks {
-		xo: xo {
-			compatible = "fixed-clock";
-			clock-frequency = <19200000>;
-			#clock-cells = <0>;
-		};
-		sleep_clk: sleep_clk {
-			compatible = "fixed-clock";
-			clock-frequency = <32000>;
-			#clock-cells = <0>;
-		};
-	};
-	timer {
-		compatible = "arm,armv8-timer";
-		interrupts = <1 2 0xf08>,
-			     <1 3 0xf08>,
-			     <1 4 0xf08>,
-			     <1 1 0xf08>;
-	};
-	aliases {
-		serial0 = &blsp1_uart5;
-		led-boot = &led_system_yellow;
-		led-failsafe = &led_system_yellow;
-		led-running = &led_system_blue;
-		led-upgrade = &led_system_yellow;
-		label-mac-device = &dp2;
-	};
-	chosen {
-		stdout-path = "serial0:115200n8";
-		bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
-	};
-	keys {
-		compatible = "gpio-keys";
-		reset {
-			label = "reset";
-			gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
-			linux,code = <KEY_RESTART>;
-		};
-	};
+    #address-cells = <2>;
+    #size-cells = <2>;
+    memory@40000000 {
+        device_type = "memory";
+        reg = <0x0 0x40000000 0x0 0x20000000>;
+    };
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+        nss_reserved: nss@40000000 {
+            reg = <0x0 0x40000000 0x0 0x1000000>;
+            no-map;
+        };
+        tzapp: tzapp@4a400000 {
+            reg = <0x0 0x4a400000 0x0 0x100000>;
+            no-map;
+        };
+        bootloader: bootloader@4a600000 {
+            reg = <0x0 0x4a600000 0x0 0x400000>;
+            no-map;
+        };
+        sbl: sbl@4aa00000 {
+            reg = <0x0 0x4aa00000 0x0 0x100000>;
+            no-map;
+        };
+        smem: smem@4ab00000 {
+            reg = <0x0 0x4ab00000 0x0 0x100000>;
+            no-map;
+        };
+        memory@4ac00000 {
+            reg = <0x0 0x4ac00000 0x0 0x400000>;
+            no-map;
+        };
+        wcnss: wcnss@4b000000 {
+            reg = <0x0 0x4b000000 0x0 0x3700000>;
+            no-map;
+        };
+        q6_etr_dump: q6_etr_dump@4e700000 {
+            reg = <0x0 0x4e700000 0x0 0x100000>;
+            no-map;
+        };
+        m3_dump: m3_dump@4e800000 {
+            reg = <0x0 0x4e800000 0x0 0x100000>;
+            no-map;
+        };
+    };
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        cpu@0 {
+            device_type = "cpu";
+            compatible = "arm,cortex-a53";
+            reg = <0x0>;
+            enable-method = "psci";
+            next-level-cache = <&L2_0>;
+        };
+        cpu@1 {
+            device_type = "cpu";
+            compatible = "arm,cortex-a53";
+            reg = <0x1>;
+            enable-method = "psci";
+            next-level-cache = <&L2_0>;
+        };
+        cpu@2 {
+            device_type = "cpu";
+            compatible = "arm,cortex-a53";
+            reg = <0x2>;
+            enable-method = "psci";
+            next-level-cache = <&L2_0>;
+        };
+        cpu@3 {
+            device_type = "cpu";
+            compatible = "arm,cortex-a53";
+            reg = <0x3>;
+            enable-method = "psci";
+            next-level-cache = <&L2_0>;
+        };
+        L2_0: l2-cache {
+            compatible = "cache";
+            cache-level = <2>;
+        };
+    };
+    psci {
+        compatible = "arm,psci-1.0";
+        method = "smc";
+    };
+    soc: soc@0 {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges = <0 0 0 0xffffffff>;
+        compatible = "simple-bus";
+        intc: interrupt-controller@b000000 {
+            compatible = "qcom,msm-qgic2";
+            interrupt-controller;
+            #interrupt-cells = <3>;
+            reg = <0x0b000000 0x1000>,
+                  <0x0b002000 0x1000>;
+        };
+        timer@b120000 {
+            compatible = "arm,armv7-timer-mem";
+            #address-cells = <1>;
+            #size-cells = <1>;
+            ranges;
+            reg = <0x0b120000 0x1000>;
+            clock-frequency = <19200000>;
+            frame@b120000 {
+                frame-number = <0>;
+                interrupts = <0 8 4>,
+                             <0 7 4>;
+                reg = <0x0b121000 0x1000>,
+                      <0x0b122000 0x1000>;
+            };
+        };
+        apcs_glb: mailbox@b111000 {
+            compatible = "qcom,ipq6018-apcs-apps-global";
+            reg = <0x0b111000 0x1000>;
+            #clock-cells = <1>;
+            clocks = <&xo>;
+            clock-names = "xo";
+        };
+        blsp1_uart5: serial@78b3000 {
+            compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
+            reg = <0x078b3000 0x200>;
+            interrupts = <0 308 4>;
+            clocks = <&gcc GCC_BLSP1_UART3_APPS_CLK>,
+                 <&gcc GCC_BLSP1_AHB_CLK>;
+            clock-names = "core", "iface";
+            status = "disabled";
+        };
+        prng: rng@22000 {
+            compatible = "qcom,prng";
+            reg = <0x00022000 0x200>;
+            clocks = <&gcc GCC_PRNG_AHB_CLK>;
+            clock-names = "core";
+            status = "disabled";
+        };
+        cryptobam: dma-controller@704000 {
+            compatible = "qcom,bam-v1.7.0";
+            reg = <0x00704000 0x20000>;
+            interrupts = <0 207 4>;
+            #dma-cells = <1>;
+            qcom,ee = <1>;
+            qcom,controlled-remotely;
+            status = "disabled";
+        };
+        crypto: crypto@73a000 {
+            compatible = "qcom,crypto-v5.1";
+            reg = <0x0073a000 0x6000>;
+            clocks = <&gcc GCC_CRYPTO_AHB_CLK>,
+                 <&gcc GCC_CRYPTO_AXI_CLK>,
+                 <&gcc GCC_CRYPTO_CLK>;
+            clock-names = "iface", "bus", "core";
+            dmas = <&cryptobam 2>, <&cryptobam 3>;
+            dma-names = "rx", "tx";
+            status = "disabled";
+        };
+        qpic_bam: dma-controller@7984000 {
+            compatible = "qcom,bam-v1.7.0";
+            reg = <0x07984000 0x1a000>;
+            interrupts = <0 286 4>;
+            #dma-cells = <1>;
+            qcom,ee = <1>;
+            qcom,controlled-remotely;
+            status = "disabled";
+        };
+        qpic_nand: nand-controller@79b0000 {
+            compatible = "qcom,ipq8074-nand";
+            reg = <0x079b0000 0x10000>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            clocks = <&gcc GCC_QPIC_CLK>,
+                 <&gcc GCC_QPIC_AHB_CLK>;
+            clock-names = "core", "aon";
+            dmas = <&qpic_bam 0>,
+                   <&qpic_bam 1>,
+                   <&qpic_bam 2>;
+            dma-names = "tx", "rx", "cmd";
+            status = "disabled";
+        };
+        mdio: mdio@90000 {
+            compatible = "qcom,ipq8074-mdio";
+            reg = <0x00090000 0x64>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+        edma: edma@3a001000 {
+            compatible = "qcom,ipq8074-edma";
+            reg = <0x3a001000 0x8000>;
+            reg-names = "edma";
+            interrupts = <0 189 4>,
+                         <0 190 4>,
+                         <0 191 4>,
+                         <0 192 4>;
+            interrupt-names = "rx0", "rx1", "tx0", "tx1";
+            clocks = <&gcc GCC_EDMA_CLK>,
+                 <&gcc GCC_EDMA_AXI_CLK>;
+            clock-names = "core", "axi";
+            resets = <&gcc GCC_EDMA_RESET>;
+            reset-names = "edma";
+            status = "disabled";
+        };
+        ess-switch@3a000000 {
+            compatible = "qcom,ipq8074-ess-switch";
+            reg = <0x3a000000 0x1000000>;
+            reg-names = "core";
+            interrupts-extended = <&intc 0 188 4>;
+            interrupt-names = "macirq";
+            clocks = <&gcc GCC_CMN_12GPLL_AHB_CLK>,
+                 <&gcc GCC_CMN_12GPLL_SYS_CLK>;
+            clock-names = "ahb", "sys";
+            resets = <&gcc GCC_ESS_RESET>;
+            reset-names = "ess";
+            qcom,mdio = <&mdio>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+            switch-cpu@0 {
+                compatible = "qcom,ess-switch-cpu";
+                reg = <0>;
+            };
+            switch-cpu@1 {
+                compatible = "qcom,ess-switch-cpu";
+                reg = <1>;
+            };
+        };
+    };
+    clocks {
+        xo: xo {
+            compatible = "fixed-clock";
+            clock-frequency = <19200000>;
+            #clock-cells = <0>;
+        };
+        sleep_clk: sleep_clk {
+            compatible = "fixed-clock";
+            clock-frequency = <32000>;
+            #clock-cells = <0>;
+        };
+    };
+    timer {
+        compatible = "arm,armv8-timer";
+        interrupts = <1 2 0xf08>,
+                 <1 3 0xf08>,
+                 <1 4 0xf08>,
+                 <1 1 0xf08>;
+    };
+    aliases {
+        serial0 = &blsp1_uart5;
+        led-boot = &led_system_yellow;
+        led-failsafe = &led_system_yellow;
+        led-running = &led_system_blue;
+        led-upgrade = &led_system_yellow;
+        label-mac-device = &dp2;
+    };
+    chosen {
+        stdout-path = "serial0:115200n8";
+        bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
+    };
+    keys {
+        compatible = "gpio-keys";
+        reset {
+            label = "reset";
+            gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
+            linux,code = <KEY_RESTART>;
+        };
+    };
 };
 &blsp1_uart5 {
-	status = "okay";
+    status = "okay";
 };
 &prng {
-	status = "okay";
+    status = "okay";
 };
 &cryptobam {
-	status = "okay";
+    status = "okay";
 };
 &crypto {
-	status = "okay";
+    status = "okay";
 };
 &qpic_bam {
-	status = "okay";
+    status = "okay";
 };
 &tlmm {
-	mdio_pins: mdio-pins {
-		mdc {
-			pins = "gpio68";
-			function = "mdc";
-			drive-strength = <8>;
-			bias-pull-up;
-		};
-		mdio {
-			pins = "gpio69";
-			function = "mdio";
-			drive-strength = <8>;
-			bias-pull-up;
-		};
-	};
+    mdio_pins: mdio-pins {
+        mdc {
+            pins = "gpio68";
+            function = "mdc";
+            drive-strength = <8>;
+            bias-pull-up;
+        };
+        mdio {
+            pins = "gpio69";
+            function = "mdio";
+            drive-strength = <8>;
+            bias-pull-up;
+        };
+    };
 };
 &qpic_nand {
-	status = "okay";
-	nand@0 {
-		reg = <0>;
-		nand-ecc-strength = <4>;
-		nand-ecc-step-size = <512>;
-		nand-bus-width = <8>;
-		partitions {
-			compatible = "fixed-partitions";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			partition@0 {
-				label = "0:sbl1";
-				reg = <0x0 0x100000>;
-				read-only;
-			};
-			partition@100000 {
-				label = "0:mibib";
-				reg = <0x100000 0x100000>;
-				read-only;
-			};
-			partition@200000 {
-				label = "0:qsee";
-				reg = <0x200000 0x300000>;
-				read-only;
-			};
-			partition@500000 {
-				label = "0:devcfg";
-				reg = <0x500000 0x80000>;
-				read-only;
-			};
-			partition@580000 {
-				label = "0:rpm";
-				reg = <0x580000 0x80000>;
-				read-only;
-			};
-			partition@600000 {
-				label = "0:cdt";
-				reg = <0x600000 0x80000>;
-				read-only;
-			};
-			partition@680000 {
-				label = "0:appsblenv";
-				reg = <0x680000 0x80000>;
-			};
-			partition@700000 {
-				label = "0:appsbl";
-				reg = <0x700000 0x100000>;
-				read-only;
-			};
-			partition@800000 {
-				label = "0:art";
-				reg = <0x800000 0x80000>;
-				read-only;
-				nvmem-layout {
-					compatible = "fixed-layout";
-					#address-cells = <1>;
-					#size-cells = <1>;
-					macaddr_dp2: macaddr@6 {
-						reg = <0x6 0x6>;
-					};
-					macaddr_dp3: macaddr@c {
-						reg = <0xc 0x6>;
-					};
-					macaddr_dp4: macaddr@12 {
-						reg = <0x12 0x6>;
-					};
-					macaddr_dp5: macaddr@18 {
-						reg = <0x18 0x6>;
-					};
-				};
-			};
-			partition@880000 {
-				label = "bdata";
-				reg = <0x880000 0x80000>;
-			};
-			partition@900000 {
-				label = "pstore";
-				reg = <0x900000 0x100000>;
-			};
-			partition@a00000 {
-				label = "rootfs";
-				reg = <0xa00000 0xf000000>;
-				compatible = "openwrt,ubi";
-			};
-			partition@fa00000 {
-				label = "rsvd0";
-				reg = <0xfa00000 0x80000>;
-				read-only;
-			};
-		};
-	};
+    status = "okay";
+    nand@0 {
+        reg = <0>;
+        nand-ecc-strength = <4>;
+        nand-ecc-step-size = <512>;
+        nand-bus-width = <8>;
+        partitions {
+            compatible = "fixed-partitions";
+            #address-cells = <1>;
+            #size-cells = <1>;
+            partition@0 {
+                label = "0:sbl1";
+                reg = <0x0 0x100000>;
+                read-only;
+            };
+            partition@100000 {
+                label = "0:mibib";
+                reg = <0x100000 0x100000>;
+                read-only;
+            };
+            partition@200000 {
+                label = "0:qsee";
+                reg = <0x200000 0x300000>;
+                read-only;
+            };
+            partition@500000 {
+                label = "0:devcfg";
+                reg = <0x500000 0x80000>;
+                read-only;
+            };
+            partition@580000 {
+                label = "0:rpm";
+                reg = <0x580000 0x80000>;
+                read-only;
+            };
+            partition@600000 {
+                label = "0:cdt";
+                reg = <0x600000 0x80000>;
+                read-only;
+            };
+            partition@680000 {
+                label = "0:appsblenv";
+                reg = <0x680000 0x80000>;
+            };
+            partition@700000 {
+                label = "0:appsbl";
+                reg = <0x700000 0x100000>;
+                read-only;
+            };
+            partition@800000 {
+                label = "0:art";
+                reg = <0x800000 0x80000>;
+                read-only;
+                nvmem-layout {
+                    compatible = "fixed-layout";
+                    #address-cells = <1>;
+                    #size-cells = <1>;
+                    macaddr_dp2: macaddr@6 {
+                        reg = <0x6 0x6>;
+                    };
+                    macaddr_dp3: macaddr@c {
+                        reg = <0xc 0x6>;
+                    };
+                    macaddr_dp4: macaddr@12 {
+                        reg = <0x12 0x6>;
+                    };
+                    macaddr_dp5: macaddr@18 {
+                        reg = <0x18 0x6>;
+                    };
+                };
+            };
+            partition@880000 {
+                label = "bdata";
+                reg = <0x880000 0x80000>;
+            };
+            partition@900000 {
+                label = "pstore";
+                reg = <0x900000 0x100000>;
+            };
+            partition@a00000 {
+                label = "rootfs";
+                reg = <0xa00000 0xf000000>;
+                compatible = "openwrt,ubi";
+            };
+            partition@fa00000 {
+                label = "rsvd0";
+                reg = <0xfa00000 0x80000>;
+                read-only;
+            };
+        };
+    };
 };
 &mdio {
-	status = "okay";
-	pinctrl-0 = <&mdio_pins>;
-	pinctrl-names = "default";
-	reset-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
-	ethernet-phy-package@0 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		compatible = "qcom,qca8075-package";
-		reg = <0>;
-		qca8075_1: ethernet-phy@1 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <1>;
-		};
-		qca8075_2: ethernet-phy@2 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <2>;
-		};
-		qca8075_3: ethernet-phy@3 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <3>;
-		};
-		qca8075_4: ethernet-phy@4 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <4>;
-		};
-	};
+    status = "okay";
+    pinctrl-0 = <&mdio_pins>;
+    pinctrl-names = "default";
+    reset-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
+    ethernet-phy-package@0 {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        compatible = "qcom,qca8075-package";
+        reg = <0>;
+        qca8075_1: ethernet-phy@1 {
+            compatible = "ethernet-phy-ieee802.3-c22";
+            reg = <1>;
+        };
+        qca8075_2: ethernet-phy@2 {
+            compatible = "ethernet-phy-ieee802.3-c22";
+            reg = <2>;
+        };
+        qca8075_3: ethernet-phy@3 {
+            compatible = "ethernet-phy-ieee802.3-c22";
+            reg = <3>;
+        };
+        qca8075_4: ethernet-phy@4 {
+            compatible = "ethernet-phy-ieee802.3-c22";
+            reg = <4>;
+        };
+    };
 };
 &switch {
-	status = "okay";
-	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>;
-	switch_wan_bmp = <ESS_PORT2>;
-	switch_mac_mode = <MAC_MODE_PSGMII>;
-	qcom,port_phyinfo {
-		port@2 {
-			port_id = <2>;
-			phy_address = <1>;
-		};
-		port@3 {
-			port_id = <3>;
-			phy_address = <2>;
-		};
-		port@4 {
-			port_id = <4>;
-			phy_address = <3>;
-		};
-		port@5 {
-			port_id = <5>;
-			phy_address = <4>;
-		};
-	};
+    status = "okay";
+    switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>;
+    switch_wan_bmp = <ESS_PORT2>;
+    switch_mac_mode = <MAC_MODE_PSGMII>;
+    qcom,port_phyinfo {
+        port@2 {
+            port_id = <2>;
+            phy_address = <1>;
+        };
+        port@3 {
+            port_id = <3>;
+            phy_address = <2>;
+        };
+        port@4 {
+            port_id = <4>;
+            phy_address = <3>;
+        };
+        port@5 {
+            port_id = <5>;
+            phy_address = <4>;
+        };
+    };
 };
 &edma {
-	status = "okay";
+    status = "okay";
 };
 &dp2 {
-	status = "okay";
-	phy-handle = <&qca8075_1>;
-	label = "wan";
-	nvmem-cells = <&macaddr_dp2>;
-	nvmem-cell-names = "mac-address";
+    status = "okay";
+    phy-handle = <&qca8075_1>;
+    label = "wan";
+    nvmem-cells = <&macaddr_dp2>;
+    nvmem-cell-names = "mac-address";
 };
 &dp3 {
-	status = "okay";
-	phy-handle = <&qca8075_2>;
-	label = "lan1";
-	nvmem-cells = <&macaddr_dp3>;
-	nvmem-cell-names = "mac-address";
+    status = "okay";
+    phy-handle = <&qca8075_2>;
+    label = "lan1";
+    nvmem-cells = <&macaddr_dp3>;
+    nvmem-cell-names = "mac-address";
 };
 &dp4 {
-	status = "okay";
-	phy-handle = <&qca8075_3>;
-	label = "lan2";
-	nvmem-cells = <&macaddr_dp4>;
-	nvmem-cell-names = "mac-address";
+    status = "okay";
+    phy-handle = <&qca8075_3>;
+    label = "lan2";
+    nvmem-cells = <&macaddr_dp4>;
+    nvmem-cell-names = "mac-address";
 };
 &dp5 {
-	status = "okay";
-	phy-handle = <&qca8075_4>;
-	label = "lan3";
-	nvmem-cells = <&macaddr_dp5>;
-	nvmem-cell-names = "mac-address";
+    status = "okay";
+    phy-handle = <&qca8075_4>;
+    label = "lan3";
+    nvmem-cells = <&macaddr_dp5>;
+    nvmem-cell-names = "mac-address";
 };
 &wifi {
-	status = "okay";
-	qcom,ath11k-fw-memory-mode = <2>;
+    status = "okay";
+    qcom,ath11k-fw-memory-mode = <2>;
 };
 DTSEOF
 
-echo "✅ ipq8071-ax3600.dtsi 已重写"
+echo "✅ ipq8071-ax3600.dtsi 已重写（无TAB，纯空格）"
 
 # ========== 2. 修改 ipq807x.mk ==========
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
@@ -516,32 +516,32 @@ if [ -f "$MK_FILE" ]; then
         cat >> "$MK_FILE" << 'MKEOF'
 
 define Device/redmi_ax6
-	$(call Device/xiaomi_ax3600)
-	DEVICE_VENDOR := Redmi
-	DEVICE_MODEL := AX6
-	IMAGE_SIZE := 245760k
-	UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB -s 2048 -O 2048
-	KERNEL_IN_UBI := 1
-	IMAGES += factory.ubi
-	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
-	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 \
-		kmod-ath11k-ahb \
-		ath11k-firmware-ipq8071 \
-		ath11k-firmware-ipq8074 \
-		uhttpd \
-		uhttpd-mod-ubus \
-		luci \
-		luci-base \
-		luci-mod-admin-full \
-		luci-theme-argon \
-		luci-app-store \
-		luci-i18n-store-zh-cn \
-		luci-i18n-base-zh-cn \
-		coreutils \
-		curl \
-		wget \
-		dropbear \
-		block-mount
+    $(call Device/xiaomi_ax3600)
+    DEVICE_VENDOR := Redmi
+    DEVICE_MODEL := AX6
+    IMAGE_SIZE := 245760k
+    UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB -s 2048 -O 2048
+    KERNEL_IN_UBI := 1
+    IMAGES += factory.ubi
+    IMAGE/factory.ubi := append-ubi | check-size \$$(IMAGE_SIZE)
+    DEVICE_PACKAGES := ipq-wifi-redmi_ax6 \
+        kmod-ath11k-ahb \
+        ath11k-firmware-ipq8071 \
+        ath11k-firmware-ipq8074 \
+        uhttpd \
+        uhttpd-mod-ubus \
+        luci \
+        luci-base \
+        luci-mod-admin-full \
+        luci-theme-argon \
+        luci-app-store \
+        luci-i18n-store-zh-cn \
+        luci-i18n-base-zh-cn \
+        coreutils \
+        curl \
+        wget \
+        dropbear \
+        block-mount
 endef
 TARGET_DEVICES += redmi_ax6
 MKEOF
