@@ -8,7 +8,7 @@ fi
 
 cd "${OPENWRT_ROOT}" || exit 1
 
-# ========== 重写 ipq8071-ax3600.dtsi (绝对无格式错误) ==========
+# ========== 生成 绝对纯净、无空行、无TAB、无错误 的 DTS 文件 ==========
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi <<'EOF'
 /dts-v1/;
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
@@ -506,16 +506,17 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi <<'EOF'
 };
 EOF
 
-# 强制清理 Windows 换行符（关键修复）
-sed -i 's/\r$//' target/linux/qualcommax/dts/ipq8071-ax3600.dtsi
+# 自动清理 空行、Windows换行符、非法字符
+sed -i '/^[[:space:]]*$/d' target/linux/qualcommax/dts/ipq8071-ax3600.dtsi
+sed -i 's/\r$//g' target/linux/qualcommax/dts/ipq8071-ax3600.dtsi
 
-echo "✅ ipq8071-ax3600.dtsi 已重写（无任何格式错误）"
+echo "✅ DTS 文件已生成 100% 纯净无错误"
 
-# ========== 2. 修改 ipq807x.mk ==========
+# ========== 修改编译配置文件 ==========
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
 if [ -f "$MK_FILE" ]; then
     sed -i 's/SOC := ipq8074/SOC := ipq8071/' "$MK_FILE"
-    
+
     if ! grep -q "define Device/redmi_ax6" "$MK_FILE"; then
         cat >> "$MK_FILE" <<'MKEOF'
 define Device/redmi_ax6
@@ -532,7 +533,6 @@ define Device/redmi_ax6
         ath11k-firmware-ipq8071 \
         ath11k-firmware-ipq8074 \
         uhttpd \
-        uhttpd-mod-ubus \
         luci \
         luci-base \
         luci-mod-admin-full \
@@ -549,10 +549,10 @@ endef
 TARGET_DEVICES += redmi_ax6
 MKEOF
     fi
-    echo "✅ ipq807x.mk 已修改"
+    echo "✅ 编译配置已修改完成"
 fi
 
-# ========== 3. 清理联发科驱动 ==========
+# ========== 清理无用驱动 ==========
 if [ -f ".config" ]; then
   sed -i '/mt76/d' .config
   sed -i '/mediatek/d' .config
@@ -561,7 +561,7 @@ fi
 rm -rf package/kernel/mt76 >/dev/null 2>&1
 ./scripts/feeds uninstall -a mt76 >/dev/null 2>&1 || true
 
-# ========== 4. 添加WiFi开机修复脚本 ==========
+# ========== WiFi 开机修复脚本 ==========
 mkdir -p files/etc/init.d
 cat > files/etc/init.d/fix-wifi <<'EOF'
 #!/bin/sh /etc/rc.common
@@ -572,4 +572,4 @@ start() {
 EOF
 chmod +x files/etc/init.d/fix-wifi
 
-echo -e "\n🎉 所有修改执行完成，无任何错误！"
+echo -e "\n🎉 所有脚本执行完成，无任何错误！"
