@@ -87,6 +87,29 @@ jobs:
           echo "CONFIG_TARGET_MULTI_PROFILE=n" >> .config
           echo "CONFIG_TARGET_ALL_PROFILES=n" >> .config
           make defconfig
+      - name: Build Toolchain
+        run: |
+          cd "$WORK_DIR/openwrt"
+          echo "=========================================="
+          echo "构建工具链..."
+          echo "=========================================="
+          make toolchain/compile -j$(nproc) 2>&1 | tee toolchain.log
+          
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ 工具链构建失败"
+            tail -50 toolchain.log
+            exit 1
+          fi
+          
+          # 验证 m4 是否生成
+          if [ -f staging_dir/host/bin/m4 ]; then
+            echo "✅ m4 工具已生成"
+          else
+            echo "⚠️ m4 工具未生成，尝试手动安装"
+            sudo apt install -y m4
+          fi
+          
+          echo "✅ 工具链构建完成"
       - name: Verify DTS Syntax
         run: |
           cd "$WORK_DIR/openwrt"
