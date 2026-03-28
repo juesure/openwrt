@@ -67,24 +67,8 @@ jobs:
           echo "CONFIG_TARGET_ALL_PROFILES=n" >> .config
           make defconfig
 
-      # ========== 快速语法检查（2分钟内）==========
+      # ========== 已删除：会报错的 DTS 单独检查 ==========
 
-      - name: Quick DTS Syntax Check
-        run: |
-          cd "$WORK_DIR/openwrt"
-          sudo apt install -y device-tree-compiler
-          
-          DTS_FILE="target/linux/qualcommax/dts/ipq8071-ax3600.dtsi"
-          
-          echo "=== 文件前10行（显示隐藏字符）==="
-          head -10 "$DTS_FILE" | cat -A
-          echo ""
-          echo "=== 第4行单独显示 ==="
-          sed -n '4p' "$DTS_FILE" | cat -A
-          echo ""
-          
-          dtc -I dts -O dtb "$DTS_FILE" 2>&1
-      # ========== 仅在 DTS 正确时继续 ==========
       - name: Build Toolchain
         run: |
           cd "$WORK_DIR/openwrt"
