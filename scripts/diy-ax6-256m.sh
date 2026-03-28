@@ -10,6 +10,7 @@ cd "${OPENWRT_ROOT}" || exit 1
 
 # ========== 重写 ipq8071-ax3600.dtsi（无TAB，纯空格，100%可编译）==========
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
+/dts-v1/;
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 #define ESS_PORT0         0
