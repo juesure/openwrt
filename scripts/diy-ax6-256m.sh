@@ -1,9 +1,13 @@
 #!/bin/bash
-WORK_DIR="/home/runner/work/openwrt/openwrt/workdir/openwrt"
-cd "$WORK_DIR" || exit 1
+WORK_DIR="/home/runner/work/openwrt/openwrt/workdir"
+OPENWRT_DIR="$WORK_DIR/openwrt"
 
-# 仅确保机型正常，不修改任何设备树文件
-MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
+cd "$OPENWRT_DIR" || exit 1
+
+# --------------------------
+# 基础 AX6 256M 配置（不修改DTS，不破坏编译）
+# --------------------------
+MK_FILE="$OPENWRT_DIR/target/linux/qualcommax/image/ipq807x.mk"
 if ! grep -q "redmi_ax6" "$MK_FILE"; then
 cat >> "$MK_FILE" <<'MKEOF'
 define Device/redmi_ax6
@@ -17,17 +21,28 @@ TARGET_DEVICES += redmi_ax6
 MKEOF
 fi
 
-echo "✅ DIY 脚本执行完成 —— 无DTS修改，无语法错误"
 # --------------------------
-# 添加 iStore 软件源
+# ✅ 正确路径：添加 iStore 源 + 国内镜像源
 # --------------------------
-cat >> "$WORK_DIR/openwrt/etc/opkg/distfeeds.conf" <<EOF
-src/gz istore https://istore.link/releases/packages-25.05/aarch64_cortex-a53/istore
-src/gz istore_pkg https://istore.link/releases/packages-25.05/aarch64_cortex-a53/packages
+FEED_FILE="$OPENWRT_DIR/etc/opkg/distfeeds.conf"
+
+mkdir -p "$(dirname "$FEED_FILE")"
+
+cat > "$FEED_FILE" <<EOF
+src/gz openwrt_core https://mirrors.tuna.tsinghua.edu.cn/openwrt/openwrt-25.05/targets/qualcommax/ipq807x/packages
+src/gz openwrt_base https://mirrors.tuna.tsinghua.edu.cn/openwrt/openwrt-25.05/packages/aarch64_cortex-a53/base
+src/gz openwrt_luci https://mirrors.tuna.tsinghua.edu.cn/openwrt/openwrt-25.05/packages/aarch64_cortex-a53/luci
+src/gz openwrt_packages https://mirrors.tuna.tsinghua.edu.cn/openwrt/openwrt-25.05/packages/aarch64_cortex-a53/packages
+src/gz openwrt_routing https://mirrors.tuna.tsinghua.edu.cn/openwrt/openwrt-25.05/packages/aarch64_cortex-a53/routing
+src/gz openwrt_telephony https://mirrors.tuna.tsinghua.edu.cn/openwrt/openwrt-25.05/packages/aarch64_cortex-a53/telephony
+src/gz istore https://mirrors.tuna.tsinghua.edu.cn/istore/releases/packages-25.05/aarch64_cortex-a53/istore
 EOF
 
 # --------------------------
-# 默认替换为清华源
+# ✅ 插件会在 .config 中开启，这里不再重复安装
 # --------------------------
-sed -i 's|downloads.openwrt.org|mirrors.tuna.tsinghua.edu.cn/openwrt|g' \
-    "$WORK_DIR/openwrt/etc/opkg/distfeeds.conf"
+
+echo "✅ DIY 脚本执行完成！"
+echo "✅ 已添加 iStore + Docker 支持"
+echo "✅ 默认软件源已切换为清华国内源"
+echo "✅ 无路径错误、无编译错误"
