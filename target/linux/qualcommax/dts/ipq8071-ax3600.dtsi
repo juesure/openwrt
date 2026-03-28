@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
+/* #include "ipq8074-512m.dtsi" */
+#include "ipq8074-ess.dtsi"
+
 / {
 	#address-cells = <2>;
 	#size-cells = <2>;
@@ -61,26 +64,46 @@
 		};
 	};
 
-	clocks {
-		xo: xo {
-			compatible = "fixed-clock";
-			clock-frequency = <19200000>;
-			#clock-cells = <0>;
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x0>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
-		sleep_clk: sleep_clk {
-			compatible = "fixed-clock";
-			clock-frequency = <32000>;
-			#clock-cells = <0>;
+		cpu@1 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x1>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
-	};
 
-	timer {
-		compatible = "arm,armv8-timer";
-		interrupts = <GIC_PPI 2 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_PPI 3 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_PPI 4 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_PPI 1 IRQ_TYPE_LEVEL_LOW>;
+		cpu@2 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x2>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+		};
+
+		cpu@3 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a53";
+			reg = <0x3>;
+			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+		};
+
+		L2_0: l2-cache {
+			compatible = "cache";
+			cache-level = <2>;
+		};
 	};
 
 	psci {
@@ -245,6 +268,28 @@
 		};
 	};
 
+	clocks {
+		xo: xo {
+			compatible = "fixed-clock";
+			clock-frequency = <19200000>;
+			#clock-cells = <0>;
+		};
+
+		sleep_clk: sleep_clk {
+			compatible = "fixed-clock";
+			clock-frequency = <32000>;
+			#clock-cells = <0>;
+		};
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <GIC_PPI 2 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 3 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 4 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 1 IRQ_TYPE_LEVEL_LOW>;
+	};
+
 	aliases {
 		serial0 = &blsp1_uart5;
 		led-boot = &led_system_yellow;
@@ -269,8 +314,6 @@
 		};
 	};
 };
-
-#include "ipq8074-ess.dtsi"
 
 &blsp1_uart5 {
 	status = "okay";
