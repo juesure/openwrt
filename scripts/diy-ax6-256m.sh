@@ -29,7 +29,6 @@ EOF
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
-
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/qcom,gcc-ipq8074.h>
 #include <dt-bindings/reset/qcom,gcc-ipq8074.h>
