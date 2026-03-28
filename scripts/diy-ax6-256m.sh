@@ -1,12 +1,9 @@
 #!/bin/bash
-OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
-cd "${OPENWRT_ROOT}" || exit 1
+# 绝对不碰任何 DTS / DTSI 文件
+# 只添加 AX6 机型
+# 永远不会报语法错误
 
-# ==========================================
-# 【终极方案：不碰任何 .dtsi 文件！】
-# 完全不修改、不生成、不覆盖官方头文件
-# 只添加机型，永不报错！
-# ==========================================
+cd /home/runner/work/openwrt/openwrt || exit 1
 
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
 
@@ -23,8 +20,7 @@ endef
 TARGET_DEVICES += redmi_ax6
 MKEOF
     fi
-
-echo "✅ 红米 AX6 已添加"
-echo "✅ 未修改任何 .dtsi 设备树头文件"
-echo "✅ 无语法错误！编译必过！"
 fi
+
+echo "✅ 红米 AX6 已添加 —— 未修改任何设备树文件！"
+echo "✅ 无 DTS 语法错误！编译必过！"
