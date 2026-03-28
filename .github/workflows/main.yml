@@ -72,25 +72,17 @@ jobs:
         run: |
           cd "$WORK_DIR/openwrt"
           
-          echo "=========================================="
-          echo "快速检查 DTS 语法..."
-          echo "=========================================="
+          sudo apt install -y device-tree-compiler
           
           DTS_FILE="target/linux/qualcommax/dts/ipq8071-ax3600.dtsi"
           
-          if [ -f "$DTS_FILE" ]; then
-            # 使用系统 dtc 直接检查
-            dtc -I dts -O dtb "$DTS_FILE" 2>&1 | tee dtc_check.log
-            
-            if [ ${PIPESTATUS[0]} -ne 0 ]; then
-              echo "❌ DTS 语法错误："
-              cat dtc_check.log
-              exit 1
-            fi
-            echo "✅ DTS 语法正确"
-          else
-            echo "⚠️ 未找到 DTS 文件，跳过检查"
-          fi
+          echo "检查文件: $DTS_FILE"
+          echo "文件前10行:"
+          head -10 "$DTS_FILE" | cat -A
+          
+          echo ""
+          echo "dtc 检查结果:"
+          dtc -I dts -O dtb "$DTS_FILE" 2>&1
 
       # ========== 仅在 DTS 正确时继续 ==========
       - name: Build Toolchain
