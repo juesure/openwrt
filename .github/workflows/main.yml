@@ -1,10 +1,5 @@
 name: Build Redmi AX6 (256M)
 
-# 并发控制：只保留最新的运行
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPO_URL: https://github.com/juesure/openwrt/
@@ -34,6 +29,19 @@ jobs:
           path: /home/runner/work/openwrt/openwrt
           fetch-depth: 1
 
+      # ========== 添加缓存 ==========
+      - name: Cache Toolchain
+        id: cache-toolchain
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.WORK_DIR }}/openwrt/staging_dir
+            ${{ env.WORK_DIR }}/openwrt/dl
+            ${{ env.WORK_DIR }}/openwrt/build_dir
+          key: ${{ runner.os }}-openwrt-toolchain-${{ hashFiles('${{ env.CONFIG_FILE }}') }}
+          restore-keys: |
+            ${{ runner.os }}-openwrt-toolchain-
+
       - name: Initialize Env
         run: |
           sudo apt update -y
@@ -47,15 +55,27 @@ jobs:
           mkdir -p "$WORK_DIR"
           chmod +x "$DIY_SCRIPT"
 
-      - name: Clean Workdir
+      - name: Clean Workdir (only if cache miss)
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
           rm -rf "$WORK_DIR"
           mkdir -p "$WORK_DIR"
 
       - name: Clone Source
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
           cd "$WORK_DIR"
           git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt
+
+      - name: Clone Source (use existing if cache hit)
+        if: steps.cache-toolchain.outputs.cache-hit == 'true'
+        run: |
+          cd "$WORK_DIR"
+          if [ ! -d openwrt ]; then
+            git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt
+          fi
+          cd openwrt
+          git pull origin "$REPO_BRANCH"
 
       - name: Preprocess
         run: |
@@ -68,53 +88,35 @@ jobs:
           echo "CONFIG_TARGET_ALL_PROFILES=n" >> .config
           make defconfig
 
-      - name: Prepare Toolchain
-        run: |
-          cd "$WORK_DIR/openwrt"
-          echo "准备编译工具链..."
-          make toolchain/compile -j$(nproc) 2>&1 | tee toolchain.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 工具链编译失败"
-            tail -100 toolchain.log
-            exit 1
-          fi
-          echo "✅ 工具链准备完成"
-
       - name: Compile
         id: compile
         run: |
           cd "$WORK_DIR/openwrt"
-          echo "开始下载源码包..."
-          make download -j$(nproc) 2>&1 | tee download.log
+          
           echo "开始编译固件..."
+          # 使用所有核心编译，加快速度
           make -j$(nproc) V=s 2>&1 | tee compile.log
+          
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo "❌ 编译失败"
+            echo "最后100行错误日志："
+            tail -100 compile.log
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
+          
           FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
-          echo "=========================================="
-          echo "检查固件目录: $FIRMWARE_DIR"
-          echo "=========================================="
-          ls -la "$FIRMWARE_DIR" || echo "目录不存在"
+          
           SYSUPGRADE_FILE=$(find "$FIRMWARE_DIR" -name "*redmi_ax6*sysupgrade.bin" -type f | head -1)
+          
           if [ -n "$SYSUPGRADE_FILE" ] && [ -f "$SYSUPGRADE_FILE" ]; then
             echo "✅ 找到固件文件: $SYSUPGRADE_FILE"
-            echo "文件大小: $(stat -c%s "$SYSUPGRADE_FILE") bytes"
             echo "status=success" >> $GITHUB_OUTPUT
             cd "$FIRMWARE_DIR"
             sha256sum *redmi_ax6*.bin > sha256sums
             md5sum *redmi_ax6*.bin > md5sums
-            echo "✅ 校验和文件已生成"
-            echo "=========================================="
-            echo "生成的文件："
-            ls -lh *redmi_ax6*
-            echo "=========================================="
           else
             echo "❌ 未找到固件文件"
-            echo "目录内容："
-            ls -la "$FIRMWARE_DIR"
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
@@ -126,30 +128,31 @@ jobs:
         run: |
           mkdir -p /home/runner/firmware
           cd "$FIRMWARE_OUTPUT_DIR"
+          
           cp *redmi_ax6*sysupgrade.bin /home/runner/firmware/ 2>/dev/null || true
           cp *redmi_ax6*factory.ubi /home/runner/firmware/ 2>/dev/null || true
           cp *redmi_ax6*rootfs.ubi /home/runner/firmware/ 2>/dev/null || true
+          
           if ls /home/runner/firmware/*.ubi 1>/dev/null 2>&1; then
             FIRST_UBI=$(ls /home/runner/firmware/*.ubi | head -1)
             cp "$FIRST_UBI" /home/runner/firmware/redmi_ax6_mtd12_ubi.bin
-            echo "✅ 生成 redmi_ax6_mtd12_ubi.bin"
           fi
+          
           cd /home/runner/firmware
           md5sum * > md5sum.txt
-          echo "待发布的文件："
-          ls -lh
+          
           BUILD_TIME=$(date +%Y%m%d_%H%M)
           RELEASE_TAG="AX6-256M-$BUILD_TIME"
+          
           gh release create "$RELEASE_TAG" ./* \
             -R ${GITHUB_REPOSITORY} \
             --title "Redmi AX6 256M Flash 固件 $BUILD_TIME" \
-            --notes "适配256MB Flash的OpenWrt固件，包含LuCI中文界面、iStore应用商店。刷写方法: TTL执行 tftpboot 0x44000000 redmi_ax6_mtd12_ubi.bin; nand erase 0xa00000 0xf000000; nand write 0x44000000 0xa00000 0xf000000; reset" \
+            --notes "适配256MB Flash的OpenWrt固件" \
             || echo "Release创建失败"
-          echo "Release创建完成: $RELEASE_TAG"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: AX6-256M-Firmware-${{ github.run_number }}
           path: /home/runner/firmware/*
-          retention-days: 30
+          retention-days: 7
