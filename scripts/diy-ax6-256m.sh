@@ -24,12 +24,11 @@ cat > target/linux/qualcommax/dts/ipq8074-ess.dtsi << 'EOF'
 #define MAC_MODE_SGMII		1
 #define MAC_MODE_QSGMII		2
 EOF
-
-# ========== 2. 直接重写 ipq8071-ax3600.dtsi（避免 BOM 和 sed 错误）==========
+# 重写 ipq8071-ax3600.dtsi（不使用 arm-gic.h）
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
-#include <dt-bindings/interrupt-controller/arm-gic.h>
+
 #include <dt-bindings/clock/qcom,gcc-ipq8074.h>
 #include <dt-bindings/reset/qcom,gcc-ipq8074.h>
 #include <dt-bindings/gpio/gpio.h>
@@ -167,8 +166,9 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 
 			frame@b120000 {
 				frame-number = <0>;
-				interrupts = <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>,
-					     <GIC_SPI 7 IRQ_TYPE_LEVEL_HIGH>;
+				/* GIC_SPI 8 and 7 with IRQ_TYPE_LEVEL_HIGH (4) */
+				interrupts = <0 8 4>,
+					     <0 7 4>;
 				reg = <0x0b121000 0x1000>,
 				      <0x0b122000 0x1000>;
 			};
@@ -185,7 +185,8 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 		blsp1_uart5: serial@78b3000 {
 			compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
 			reg = <0x078b3000 0x200>;
-			interrupts = <GIC_SPI 308 IRQ_TYPE_LEVEL_HIGH>;
+			/* GIC_SPI 308 with IRQ_TYPE_LEVEL_HIGH (4) */
+			interrupts = <0 308 4>;
 			clocks = <&gcc GCC_BLSP1_UART3_APPS_CLK>,
 				 <&gcc GCC_BLSP1_AHB_CLK>;
 			clock-names = "core", "iface";
@@ -203,7 +204,8 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 		cryptobam: dma-controller@704000 {
 			compatible = "qcom,bam-v1.7.0";
 			reg = <0x00704000 0x20000>;
-			interrupts = <GIC_SPI 207 IRQ_TYPE_LEVEL_HIGH>;
+			/* GIC_SPI 207 with IRQ_TYPE_LEVEL_HIGH (4) */
+			interrupts = <0 207 4>;
 			#dma-cells = <1>;
 			qcom,ee = <1>;
 			qcom,controlled-remotely;
@@ -225,7 +227,8 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 		qpic_bam: dma-controller@7984000 {
 			compatible = "qcom,bam-v1.7.0";
 			reg = <0x07984000 0x1a000>;
-			interrupts = <GIC_SPI 286 IRQ_TYPE_LEVEL_HIGH>;
+			/* GIC_SPI 286 with IRQ_TYPE_LEVEL_HIGH (4) */
+			interrupts = <0 286 4>;
 			#dma-cells = <1>;
 			qcom,ee = <1>;
 			qcom,controlled-remotely;
@@ -259,10 +262,11 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			compatible = "qcom,ipq8074-edma";
 			reg = <0x3a001000 0x8000>;
 			reg-names = "edma";
-			interrupts = <GIC_SPI 189 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 190 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 191 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 192 IRQ_TYPE_LEVEL_HIGH>;
+			/* GIC_SPI 189-192 with IRQ_TYPE_LEVEL_HIGH (4) */
+			interrupts = <0 189 4>,
+				     <0 190 4>,
+				     <0 191 4>,
+				     <0 192 4>;
 			interrupt-names = "rx0", "rx1", "tx0", "tx1";
 			clocks = <&gcc GCC_EDMA_CLK>,
 				 <&gcc GCC_EDMA_AXI_CLK>;
@@ -276,7 +280,8 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 			compatible = "qcom,ipq8074-ess-switch";
 			reg = <0x3a000000 0x1000000>;
 			reg-names = "core";
-			interrupts-extended = <&intc GIC_SPI 188 IRQ_TYPE_LEVEL_HIGH>;
+			/* GIC_SPI 188 with IRQ_TYPE_LEVEL_HIGH (4) */
+			interrupts-extended = <&intc 0 188 4>;
 			interrupt-names = "macirq";
 			clocks = <&gcc GCC_CMN_12GPLL_AHB_CLK>,
 				 <&gcc GCC_CMN_12GPLL_SYS_CLK>;
@@ -316,10 +321,11 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 
 	timer {
 		compatible = "arm,armv8-timer";
-		interrupts = <GIC_PPI 2 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_PPI 3 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_PPI 4 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_PPI 1 IRQ_TYPE_LEVEL_LOW>;
+		/* GIC_PPI 2,3,4,1 with IRQ_TYPE_LEVEL_LOW (0xf08) */
+		interrupts = <1 2 0xf08>,
+			     <1 3 0xf08>,
+			     <1 4 0xf08>,
+			     <1 1 0xf08>;
 	};
 
 	aliases {
@@ -602,73 +608,3 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'DTSEOF'
 DTSEOF
 
 echo "✅ ipq8071-ax3600.dtsi 已重写"
-
-# ========== 3. 修改 ipq807x.mk ==========
-MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
-if [ -f "$MK_FILE" ]; then
-    # 修改 xiaomi_ax3600 的 SOC
-    sed -i 's/SOC := ipq8074/SOC := ipq8071/' "$MK_FILE"
-    
-    # 添加 redmi_ax6 配置（如果不存在）
-    if ! grep -q "define Device/redmi_ax6" "$MK_FILE"; then
-        cat >> "$MK_FILE" << 'MKEOF'
-
-define Device/redmi_ax6
-	$(call Device/xiaomi_ax3600)
-	DEVICE_VENDOR := Redmi
-	DEVICE_MODEL := AX6
-	IMAGE_SIZE := 245760k
-	UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB -s 2048 -O 2048
-	KERNEL_IN_UBI := 1
-	IMAGES += factory.ubi
-	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
-	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 \
-		kmod-ath11k-ahb \
-		ath11k-firmware-ipq8071 \
-		ath11k-firmware-ipq8074 \
-		uhttpd \
-		uhttpd-mod-ubus \
-		luci \
-		luci-base \
-		luci-mod-admin-full \
-		luci-theme-argon \
-		luci-app-store \
-		luci-i18n-store-zh-cn \
-		luci-i18n-base-zh-cn \
-		coreutils \
-		curl \
-		wget \
-		dropbear \
-		block-mount
-endef
-TARGET_DEVICES += redmi_ax6
-MKEOF
-    fi
-    echo "✅ ipq807x.mk 已修改"
-fi
-
-# ========== 4. 清理联发科 ==========
-if [ -f ".config" ]; then
-  sed -i '/mt76/d' .config
-  sed -i '/mediatek/d' .config
-fi
-
-rm -rf package/kernel/mt76
-./scripts/feeds uninstall -a mt76 2>/dev/null || true
-
-# ========== 5. 添加 WiFi 固件修复脚本 ==========
-mkdir -p files/etc/init.d
-cat > files/etc/init.d/fix-wifi << 'EOF'
-#!/bin/sh /etc/rc.common
-
-START=98
-
-start() {
-    if [ -d /lib/firmware/ath11k/IPQ8074/hw2.0 ] && [ ! -f /lib/firmware/ath11k/IPQ8074/q6_fw.mdt ]; then
-        cd /lib/firmware/ath11k/IPQ8074/ && ln -sf hw2.0/* . 2>/dev/null
-    fi
-}
-EOF
-chmod +x files/etc/init.d/fix-wifi
-
-echo "✅ DIY 脚本执行完成"
