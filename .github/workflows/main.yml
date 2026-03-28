@@ -80,18 +80,17 @@ jobs:
         run: |
           cd "$WORK_DIR/openwrt"
           
-          echo "开始编译固件..."
-          make -j$(nproc) 2>&1 | tee compile.log | grep -E "(ERROR|Error|warning:|make\[|Building|target|Kernel|Image|UBI|Success|Failed)" || true
+          echo "开始编译固件（单线程 + 完整日志）..."
+          make -j1 V=s 2>&1 | tee compile.log
           
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 编译失败"
-            tail -50 compile.log
+            echo "❌ 编译失败，显示完整错误日志"
+            cat compile.log
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
           
           FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
-          
           if ls "$FIRMWARE_DIR"/*redmi_ax6*sysupgrade.bin 1>/dev/null 2>&1; then
             echo "✅ 固件编译成功"
             echo "status=success" >> $GITHUB_OUTPUT
