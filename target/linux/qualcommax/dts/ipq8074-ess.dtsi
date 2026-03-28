@@ -1,0 +1,12 @@
+#define ESS_PORT0			0
+#define ESS_PORT1			1
+#define ESS_PORT2			2
+#define ESS_PORT3			3
+#define ESS_PORT4			4
+#define ESS_PORT5			5
+#define ESS_PORT6			6
+#define ESS_PORT7			7
+
+#define MAC_MODE_PSGMII		0
+#define MAC_MODE_SGMII		1
+#define MAC_MODE_QSGMII		2
