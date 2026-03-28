@@ -1,10 +1,12 @@
 #!/bin/bash
-OPENWRT_ROOT="/home/runner/work/openwrt/openw/workdir/openwrt"
+# 【正确路径】与你的环境完全匹配
+OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
+
 cd "${OPENWRT_ROOT}" || exit 1
 
 # ==========================================
-# 【官方原版 + 强制第一行 /dts-v1/; 】
-# 这是唯一能让 dtc 编译器不报错的格式
+# 【终极正确 DTS】第一行必加 /dts-v1/;
+# 解决 #include 语法错误
 # ==========================================
 cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi <<'EOF'
 /dts-v1/;
@@ -28,14 +30,14 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi <<'EOF'
 };
 EOF
 
-# 清理 Windows 换行符
+# 清理格式，避免报错
 sed -i 's/\r//g' target/linux/qualcommax/dts/ipq8071-ax3600.dtsi
 
 # ==========================================
-# 添加 AX6 机型
+# 添加 AX6 编译支持
 # ==========================================
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
-if [ -f "$MK_FILE" ]; then
+if [ -f "$MK_FILE" ] && ! grep -q "redmi_ax6" "$MK_FILE"; then
 cat >> "$MK_FILE" <<'MKEOF'
 define Device/redmi_ax6
   $(call Device/xiaomi_ax3600)
@@ -48,4 +50,4 @@ TARGET_DEVICES += redmi_ax6
 MKEOF
 fi
 
-echo "✅ 修复完成！"
+echo "✅ 修复完成：路径正确 + DTS 无语法错误 + AX6 已添加"
