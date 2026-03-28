@@ -87,34 +87,49 @@ jobs:
           echo "CONFIG_TARGET_MULTI_PROFILE=n" >> .config
           echo "CONFIG_TARGET_ALL_PROFILES=n" >> .config
           make defconfig
-
+      - name: Verify DTS Syntax
+        run: |
+          cd "$WORK_DIR/openwrt"
+          
+          echo "=========================================="
+          echo "验证 DTS 语法..."
+          echo "=========================================="
+          
+          # 只验证 DTS 语法，不完整编译
+          make target/linux/dtb V=s 2>&1 | tee dts_check.log | grep -E "(Error|error|syntax error)" || true
+          
+          if grep -q "Error" dts_check.log; then
+            echo "❌ DTS 语法错误："
+            grep -E "(Error|error|syntax error)" dts_check.log
+            exit 1
+          fi
+          
+          echo "✅ DTS 语法正确"
       - name: Compile
         id: compile
         run: |
           cd "$WORK_DIR/openwrt"
           
           echo "开始编译固件..."
-          # 使用所有核心编译，加快速度
-          make -j$(nproc) V=s 2>&1 | tee compile.log
           
+          # 只输出关键信息，减少日志
+          make -j$(nproc) 2>&1 | tee compile.log | grep -E "(ERROR|Error|warning:|make\[|Building|target|Kernel|Image|UBI|✔|❌|Success|Failed|Compiled)" || true
+          
+          # 检查编译结果
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 编译失败"
-            echo "最后100行错误日志："
-            tail -100 compile.log
+            echo "❌ 编译失败，显示最后50行错误："
+            tail -50 compile.log
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
           
+          # 检查固件文件
           FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
           
-          SYSUPGRADE_FILE=$(find "$FIRMWARE_DIR" -name "*redmi_ax6*sysupgrade.bin" -type f | head -1)
-          
-          if [ -n "$SYSUPGRADE_FILE" ] && [ -f "$SYSUPGRADE_FILE" ]; then
-            echo "✅ 找到固件文件: $SYSUPGRADE_FILE"
+          if [ -f "$FIRMWARE_DIR"/*redmi_ax6*sysupgrade.bin ]; then
+            echo "✅ 固件编译成功"
             echo "status=success" >> $GITHUB_OUTPUT
-            cd "$FIRMWARE_DIR"
-            sha256sum *redmi_ax6*.bin > sha256sums
-            md5sum *redmi_ax6*.bin > md5sums
+            ls -lh "$FIRMWARE_DIR"/*redmi_ax6*
           else
             echo "❌ 未找到固件文件"
             echo "status=failed" >> $GITHUB_OUTPUT
