@@ -68,24 +68,22 @@ jobs:
           cd "$WORK_DIR/openwrt"
           echo "🔧 构建工具链（单线程稳定模式，避免GCC崩溃）..."
           make toolchain/compile -j$(nproc) 2>&1 | tail -20
-
       - name: Compile
         id: compile
         run: |
           cd "$WORK_DIR/openwrt"
           
           echo "============================================="
-          echo "          开始多线程编译固件"
-          echo "          线程数: $(nproc) | 日志精简模式"
+          echo "        多线程编译固件（完整错误日志）"
           echo "============================================="
           
-          # 多线程编译 + 只输出关键日志
-          make -j$(nproc) 2>&1 | grep -E '^make|^ERROR|^warning|^install|^Image|^DONE|^FAILED|^fatal error' | tee compile.log
+          # 多线程编译 + 完整日志（不屏蔽任何错误）
+          make -j$(nproc) 2>&1 | tee compile.log
           
-          # 判断编译是否失败
+          # 捕获编译是否失败
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo -e "\n❌ 编译失败，显示错误信息"
-            grep -A 10 -B 5 "error:\|Error\|ERROR\|fatal" compile.log | tail -50
+            echo -e "\n❌ 编译失败，显示最后 100 行错误信息"
+            tail -100 compile.log
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
@@ -95,13 +93,13 @@ jobs:
              ls "$FIRMWARE_DIR"/*redmi_ax6*.ubi 1>/dev/null 2>&1; then
             echo -e "\n✅ 固件编译成功！"
             echo "status=success" >> $GITHUB_OUTPUT
-            echo -e "\n生成的固件文件："
             ls -lh "$FIRMWARE_DIR"/*redmi_ax6*
           else
             echo -e "\n❌ 未找到固件文件"
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
+
 
       - name: Package & Release
         if: steps.compile.outputs.status == 'success'
