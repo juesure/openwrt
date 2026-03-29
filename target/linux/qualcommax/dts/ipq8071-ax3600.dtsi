@@ -7,7 +7,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 
-/* ESS_PORT 宏定义（原 ipq8074-ess.dtsi 内容） */
+/* ESS_PORT 宏定义 */
 #define ESS_PORT0			0
 #define ESS_PORT1			1
 #define ESS_PORT2			2
