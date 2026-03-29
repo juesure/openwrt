@@ -66,8 +66,8 @@ jobs:
       - name: Build Toolchain
         run: |
           cd "$WORK_DIR/openwrt"
-          echo "构建工具链..."
-          make toolchain/prepare toolchain/compile target/compile -j$(nproc) --silent 2>/dev/null
+          echo "🔧 构建工具链（单线程稳定模式，避免GCC崩溃）..."
+          make toolchain/compile -j1 V=s 2>&1 | tee toolchain.log
 
       - name: Compile
         id: compile
