@@ -67,7 +67,7 @@ jobs:
         run: |
           cd "$WORK_DIR/openwrt"
           echo "🔧 构建工具链（单线程稳定模式，避免GCC崩溃）..."
-          make toolchain/compile -j1 V=s 2>&1 | tee toolchain.log
+          make toolchain/compile -j$(nproc) 2>&1 | tail -20
 
       - name: Compile
         id: compile
