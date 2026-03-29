@@ -19,7 +19,7 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
-		bootargs-append = " root=/dev/ubiblock0_0";
+		bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
 	};
 
 	keys {
@@ -29,24 +29,6 @@
 			label = "reset";
 			gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_RESTART>;
-		};
-	};
-};
-
-&tlmm {
-	mdio_pins: mdio-pins {
-		mdc {
-			pins = "gpio68";
-			function = "mdc";
-			drive-strength = <8>;
-			bias-pull-up;
-		};
-
-		mdio {
-			pins = "gpio69";
-			function = "mdio";
-			drive-strength = <8>;
-			bias-pull-up;
 		};
 	};
 };
@@ -71,35 +53,38 @@
 	status = "okay";
 };
 
+&tlmm {
+	mdio_pins: mdio-pins {
+		mdc {
+			pins = "gpio68";
+			function = "mdc";
+			drive-strength = <8>;
+			bias-pull-up;
+		};
+
+		mdio {
+			pins = "gpio69";
+			function = "mdio";
+			drive-strength = <8>;
+			bias-pull-up;
+		};
+	};
+};
+
 &qpic_nand {
 	status = "okay";
-
-	/* 保留原有注释，禁用 bootloader 自动填充的分区表 */
-	partitions {
-		status = "disabled";
-	};
 
 	nand@0 {
 		reg = <0>;
 		nand-ecc-strength = <4>;
 		nand-ecc-step-size = <512>;
 		nand-bus-width = <8>;
-		// 新增1：启用坏块表，自动识别/跳过坏块
-		nand-on-flash-bbt;
-		// 新增2：指定 ECC 模式为硬件加速
-		nand-ecc-mode = "hw";
-		// 新增3：标记 Flash 总容量为 256MB（0x20000000 = 256*1024*1024）
-		nand-size = <0x20000000>;
-		// 新增4：适配 256M NAND 芯片 ID（按需替换）
-		nand-id = <0x98 0xdc 0x90 0x15>; // 镁光 MX30LF2G18AC
-		// nand-id = <0xef 0xaa 0x90 0x15>; // 华邦 W25N02KVZEIG
 
 		partitions {
 			compatible = "fixed-partitions";
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			/* 引导分区：保留原大小，偏移不变（无坏块） */
 			partition@0 {
 				label = "0:sbl1";
 				reg = <0x0 0x100000>;
@@ -136,23 +121,20 @@
 				read-only;
 			};
 
-			/* 核心修改1：appsblenv 分区偏移从 0x680000 → 0x6A0000（避开坏块） */
-			partition@6A0000 {
+			partition@680000 {
 				label = "0:appsblenv";
-				reg = <0x6A0000 0x80000>;
+				reg = <0x680000 0x80000>;
 			};
 
-			/* 核心修改2：appsbl 分区同步后移（偏移从 0x700000 → 0x720000） */
-			partition@720000 {
+			partition@700000 {
 				label = "0:appsbl";
-				reg = <0x720000 0x100000>;
+				reg = <0x700000 0x100000>;
 				read-only;
 			};
 
-			/* ART 分区：同步后移（偏移从 0x800000 → 0x820000），保留 WiFi 校准数据 */
-			partition@820000 {
+			partition@800000 {
 				label = "0:art";
-				reg = <0x820000 0x80000>;
+				reg = <0x800000 0x80000>;
 				read-only;
 
 				nvmem-layout {
@@ -182,29 +164,31 @@
 				};
 			};
 
-			/* 辅助分区：同步后移，避开坏块 */
-			partition@8A0000 {
+			partition@880000 {
 				label = "bdata";
-				reg = <0x8A0000 0x80000>;
+				reg = <0x880000 0x80000>;
 			};
 
-			partition@920000 {
-				label = "pstore";
-				reg = <0x920000 0x100000>;
+			partition@900000 {
+				label = "crash";
+				reg = <0x900000 0x80000>;
 			};
 
-			/* 核心修改3：ubi_kernel 分区移至坏块区之后（偏移从 0xa00000 → 0x0FA0000） */
-			partition@0FA0000 {
-				label = "ubi_kernel";
-				reg = <0x0FA0000 0x23c0000>;
+			partition@980000 {
+				label = "crash_syslog";
+				reg = <0x980000 0x80000>;
 			};
 
-			/* 核心修改4：rootfs 分区扩容+移至坏块区之后（偏移 0x0FB40000，大小 240MB） */
-			rootfs: partition@0FB40000 {
+			partition@a00000 {
 				label = "rootfs";
-				reg = <0x0FB40000 0x1E000000>;
-				// 新增：指定 UBIFS 格式，天然支持跳过坏块
-				compatible = "ubifs";
+				reg = <0xa00000 0xf000000>;
+				compatible = "openwrt,ubi";
+			};
+
+			partition@fa00000 {
+				label = "rsvd0";
+				reg = <0xfa00000 0x80000>;
+				read-only;
 			};
 		};
 	};
@@ -248,9 +232,9 @@
 &switch {
 	status = "okay";
 
-	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>; /* lan port bitmap */
-	switch_wan_bmp = <ESS_PORT2>; /* wan port bitmap */
-	switch_mac_mode = <MAC_MODE_PSGMII>; /* mac mode for uniphy instance0*/
+	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>;
+	switch_wan_bmp = <ESS_PORT2>;
+	switch_mac_mode = <MAC_MODE_PSGMII>;
 
 	qcom,port_phyinfo {
 		port@2 {
@@ -310,6 +294,4 @@
 
 &wifi {
 	status = "okay";
-
-	qcom,ath11k-fw-memory-mode = <1>;
 };
