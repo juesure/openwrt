@@ -1,299 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
-#include <dt-bindings/interrupt-controller/arm-gic.h>
-#include <dt-bindings/clock/qcom,gcc-ipq8074.h>
-#include <dt-bindings/reset/qcom,gcc-ipq8071.h>
+#include "ipq8074-512m.dtsi"
+#include "ipq8074-ac-cpu.dtsi"
+#include "ipq8074-ess.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
-#include "ipq8074-ess.dtsi"
 
 / {
-	#address-cells = <2>;
-	#size-cells = <2>;
-
-	memory@40000000 {
-		device_type = "memory";
-		reg = <0x0 0x40000000 0x0 0x20000000>;
-	};
-
-	reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		nss_reserved: nss@40000000 {
-			reg = <0x0 0x40000000 0x0 0x1000000>;
-			no-map;
-		};
-
-		tzapp: tzapp@4a400000 {
-			reg = <0x0 0x4a400000 0x0 0x100000>;
-			no-map;
-		};
-
-		bootloader: bootloader@4a600000 {
-			reg = <0x0 0x4a600000 0x0 0x400000>;
-			no-map;
-		};
-
-		sbl: sbl@4aa00000 {
-			reg = <0x0 0x4aa00000 0x0 0x100000>;
-			no-map;
-		};
-
-		smem: smem@4ab00000 {
-			reg = <0x0 0x4ab00000 0x0 0x100000>;
-			no-map;
-		};
-
-		memory@4ac00000 {
-			reg = <0x0 0x4ac00000 0x0 0x400000>;
-			no-map;
-		};
-
-		wcnss: wcnss@4b000000 {
-			reg = <0x0 0x4b000000 0x0 0x3700000>;
-			no-map;
-		};
-
-		q6_etr_dump: q6_etr_dump@4e700000 {
-			reg = <0x0 0x4e700000 0x0 0x100000>;
-			no-map;
-		};
-
-		m3_dump: m3_dump@4e800000 {
-			reg = <0x0 0x4e800000 0x0 0x100000>;
-			no-map;
-		};
-	};
-
-	cpus {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		cpu@0 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x0>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-
-		cpu@1 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x1>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-
-		cpu@2 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x2>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-
-		cpu@3 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x3>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-
-		L2_0: l2-cache {
-			compatible = "cache";
-			cache-level = <2>;
-		};
-	};
-
-	psci {
-		compatible = "arm,psci-1.0";
-		method = "smc";
-	};
-
-	soc: soc@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges = <0 0 0 0xffffffff>;
-		compatible = "simple-bus";
-
-		intc: interrupt-controller@b000000 {
-			compatible = "qcom,msm-qgic2";
-			interrupt-controller;
-			#interrupt-cells = <3>;
-			reg = <0x0b000000 0x1000>,
-			      <0x0b002000 0x1000>;
-		};
-
-		timer@b120000 {
-			compatible = "arm,armv7-timer-mem";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			ranges;
-			reg = <0x0b120000 0x1000>;
-			clock-frequency = <19200000>;
-
-			frame@b120000 {
-				frame-number = <0>;
-				interrupts = <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>,
-					     <GIC_SPI 7 IRQ_TYPE_LEVEL_HIGH>;
-				reg = <0x0b121000 0x1000>,
-				      <0x0b122000 0x1000>;
-			};
-		};
-
-		apcs_glb: mailbox@b111000 {
-			compatible = "qcom,ipq6018-apcs-apps-global";
-			reg = <0x0b111000 0x1000>;
-			#clock-cells = <1>;
-			clocks = <&xo>;
-			clock-names = "xo";
-		};
-
-		blsp1_uart5: serial@78b3000 {
-			compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
-			reg = <0x078b3000 0x200>;
-			interrupts = <GIC_SPI 308 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&gcc GCC_BLSP1_UART3_APPS_CLK>,
-				 <&gcc GCC_BLSP1_AHB_CLK>;
-			clock-names = "core", "iface";
-			status = "disabled";
-		};
-
-		prng: rng@22000 {
-			compatible = "qcom,prng";
-			reg = <0x00022000 0x200>;
-			clocks = <&gcc GCC_PRNG_AHB_CLK>;
-			clock-names = "core";
-			status = "disabled";
-		};
-
-		cryptobam: dma-controller@704000 {
-			compatible = "qcom,bam-v1.7.0";
-			reg = <0x00704000 0x20000>;
-			interrupts = <GIC_SPI 207 IRQ_TYPE_LEVEL_HIGH>;
-			#dma-cells = <1>;
-			qcom,ee = <1>;
-			qcom,controlled-remotely;
-			status = "disabled";
-		};
-
-		crypto: crypto@73a000 {
-			compatible = "qcom,crypto-v5.1";
-			reg = <0x0073a000 0x6000>;
-			clocks = <&gcc GCC_CRYPTO_AHB_CLK>,
-				 <&gcc GCC_CRYPTO_AXI_CLK>,
-				 <&gcc GCC_CRYPTO_CLK>;
-			clock-names = "iface", "bus", "core";
-			dmas = <&cryptobam 2>, <&cryptobam 3>;
-			dma-names = "rx", "tx";
-			status = "disabled";
-		};
-
-		qpic_bam: dma-controller@7984000 {
-			compatible = "qcom,bam-v1.7.0";
-			reg = <0x07984000 0x1a000>;
-			interrupts = <GIC_SPI 286 IRQ_TYPE_LEVEL_HIGH>;
-			#dma-cells = <1>;
-			qcom,ee = <1>;
-			qcom,controlled-remotely;
-			status = "disabled";
-		};
-
-		qpic_nand: nand-controller@79b0000 {
-			compatible = "qcom,ipq8074-nand";
-			reg = <0x079b0000 0x10000>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			clocks = <&gcc GCC_QPIC_CLK>,
-				 <&gcc GCC_QPIC_AHB_CLK>;
-			clock-names = "core", "aon";
-			dmas = <&qpic_bam 0>,
-			       <&qpic_bam 1>,
-			       <&qpic_bam 2>;
-			dma-names = "tx", "rx", "cmd";
-			status = "disabled";
-		};
-
-		mdio: mdio@90000 {
-			compatible = "qcom,ipq8074-mdio";
-			reg = <0x00090000 0x64>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-		};
-
-		edma: edma@3a001000 {
-			compatible = "qcom,ipq8074-edma";
-			reg = <0x3a001000 0x8000>;
-			reg-names = "edma";
-			interrupts = <GIC_SPI 189 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 190 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 191 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 192 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "rx0", "rx1", "tx0", "tx1";
-			clocks = <&gcc GCC_EDMA_CLK>,
-				 <&gcc GCC_EDMA_AXI_CLK>;
-			clock-names = "core", "axi";
-			resets = <&gcc GCC_EDMA_RESET>;
-			reset-names = "edma";
-			status = "disabled";
-		};
-
-		ess-switch@3a000000 {
-			compatible = "qcom,ipq8074-ess-switch";
-			reg = <0x3a000000 0x1000000>;
-			reg-names = "core";
-			interrupts-extended = <&intc GIC_SPI 188 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "macirq";
-			clocks = <&gcc GCC_CMN_12GPLL_AHB_CLK>,
-				 <&gcc GCC_CMN_12GPLL_SYS_CLK>;
-			clock-names = "ahb", "sys";
-			resets = <&gcc GCC_ESS_RESET>;
-			reset-names = "ess";
-			qcom,mdio = <&mdio>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-
-			switch-cpu@0 {
-				compatible = "qcom,ess-switch-cpu";
-				reg = <0>;
-			};
-
-			switch-cpu@1 {
-				compatible = "qcom,ess-switch-cpu";
-				reg = <1>;
-			};
-		};
-	};
-
-	clocks {
-		xo: xo {
-			compatible = "fixed-clock";
-			clock-frequency = <19200000>;
-			#clock-cells = <0>;
-		};
-
-		sleep_clk: sleep_clk {
-			compatible = "fixed-clock";
-			clock-frequency = <32000>;
-			#clock-cells = <0>;
-		};
-	};
-
-	timer {
-		compatible = "arm,armv8-timer";
-		interrupts = <GIC_PPI 2 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_PPI 3 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_PPI 4 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_PPI 1 IRQ_TYPE_LEVEL_LOW>;
-	};
-
 	aliases {
 		serial0 = &blsp1_uart5;
 		led-boot = &led_system_yellow;
@@ -443,6 +157,10 @@
 					macaddr_dp5: macaddr@18 {
 						reg = <0x18 0x6>;
 					};
+
+					caldata_qca9889: caldata@4d000 {
+						reg = <0x33000 0x844>;
+					};
 				};
 			};
 
@@ -452,8 +170,13 @@
 			};
 
 			partition@900000 {
-				label = "pstore";
-				reg = <0x900000 0x100000>;
+				label = "crash";
+				reg = <0x900000 0x80000>;
+			};
+
+			partition@980000 {
+				label = "crash_syslog";
+				reg = <0x980000 0x80000>;
 			};
 
 			partition@a00000 {
@@ -473,6 +196,7 @@
 
 &mdio {
 	status = "okay";
+
 	pinctrl-0 = <&mdio_pins>;
 	pinctrl-names = "default";
 	reset-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
@@ -507,6 +231,7 @@
 
 &switch {
 	status = "okay";
+
 	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>;
 	switch_wan_bmp = <ESS_PORT2>;
 	switch_mac_mode = <MAC_MODE_PSGMII>;
@@ -569,5 +294,4 @@
 
 &wifi {
 	status = "okay";
-	qcom,ath11k-fw-memory-mode = <2>;
 };
