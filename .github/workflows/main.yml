@@ -1,8 +1,9 @@
 name: Build Redmi AX6 (256M)
-# 并发控制
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPO_URL: https://github.com/juesure/openwrt/
@@ -12,22 +13,26 @@ env:
   TZ: Asia/Shanghai
   WORK_DIR: /home/runner/work/openwrt/openwrt/workdir
   FIRMWARE_OUTPUT_DIR: /home/runner/work/openwrt/openwrt/workdir/openwrt/bin/targets/qualcommax/ipq807x
+
 on:
   push:
     branches:
       - 256M_FLASH_NOBAD_BLOCK
   workflow_dispatch:
+
 jobs:
   build-ax6-firmware:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4.2.0
         with:
           path: /home/runner/work/openwrt/openwrt
           fetch-depth: 1
+
       - name: Initialize Env
         run: |
           sudo apt update -y
@@ -61,29 +66,32 @@ jobs:
           echo "CONFIG_TARGET_ALL_PROFILES=n" >> .config
           make defconfig
 
-      # ========== 已删除：会报错的 DTS 单独检查 ==========
-
       - name: Build Toolchain
         run: |
           cd "$WORK_DIR/openwrt"
-          echo "🔧 构建工具链（单线程稳定模式，避免GCC崩溃）..."
-          make toolchain/compile -j$(nproc) 2>&1 | tail -20
+          echo "🔧 构建工具链..."
+          make toolchain/compile -j$(nproc) 2>&1 | tee toolchain.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ 工具链编译失败"
+            tail -100 toolchain.log
+            exit 1
+          fi
+
       - name: Compile
         id: compile
         run: |
           cd "$WORK_DIR/openwrt"
           
           echo "============================================="
-          echo "        多线程编译固件（完整错误日志）"
+          echo "        单线程详细编译（V=s）"
           echo "============================================="
           
-          # 多线程编译 + 完整日志（不屏蔽任何错误）
-          make -j$(nproc) 2>&1 | tee compile.log
+          # 使用单线程 + 详细输出，确保错误完整显示
+          make -j1 V=s 2>&1 | tee compile.log
           
-          # 捕获编译是否失败
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo -e "\n❌ 编译失败，显示最后 100 行错误信息"
-            tail -100 compile.log
+            echo -e "\n❌ 编译失败，显示最后 200 行错误信息"
+            tail -200 compile.log
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
@@ -99,7 +107,6 @@ jobs:
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
-
 
       - name: Package & Release
         if: steps.compile.outputs.status == 'success'
