@@ -80,23 +80,31 @@ jobs:
         run: |
           cd "$WORK_DIR/openwrt"
           
-          echo "开始编译固件（单线程 + 完整日志）..."
-          make -j1 V=s 2>&1 | tee compile.log
+          echo "============================================="
+          echo "          开始多线程编译固件"
+          echo "          线程数: $(nproc) | 日志精简模式"
+          echo "============================================="
           
+          # 多线程编译 + 只输出关键日志
+          make -j$(nproc) 2>&1 | grep -E '^make|^ERROR|^warning|^install|^Image|^DONE|^FAILED|^fatal error' | tee compile.log
+          
+          # 判断编译是否失败
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 编译失败，显示完整错误日志"
-            cat compile.log
+            echo -e "\n❌ 编译失败，显示错误信息"
+            grep -A 10 -B 5 "error:\|Error\|ERROR\|fatal" compile.log | tail -50
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
           
           FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
-          if ls "$FIRMWARE_DIR"/*redmi_ax6*sysupgrade.bin 1>/dev/null 2>&1; then
-            echo "✅ 固件编译成功"
+          if ls "$FIRMWARE_DIR"/*redmi_ax6*sysupgrade.bin 1>/dev/null 2>&1 || \
+             ls "$FIRMWARE_DIR"/*redmi_ax6*.ubi 1>/dev/null 2>&1; then
+            echo -e "\n✅ 固件编译成功！"
             echo "status=success" >> $GITHUB_OUTPUT
+            echo -e "\n生成的固件文件："
             ls -lh "$FIRMWARE_DIR"/*redmi_ax6*
           else
-            echo "❌ 未找到固件文件"
+            echo -e "\n❌ 未找到固件文件"
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
