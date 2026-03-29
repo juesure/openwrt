@@ -67,7 +67,7 @@ jobs:
         run: |
           cd "$WORK_DIR/openwrt"
           echo "构建工具链..."
-          make toolchain/compile -j$(nproc) 2>&1 | tail -20
+          make toolchain/prepare toolchain/compile target/compile -j$(nproc) --silent 2>/dev/null
 
       - name: Compile
         id: compile
