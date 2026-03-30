@@ -5,10 +5,8 @@ cd "$OPENWRT_ROOT" || exit 1
 DTS_DIR="target/linux/qualcommax/dts"
 mkdir -p "$DTS_DIR"
 
-# 1. 创建基础 ipq8074.dtsi（如果不存在）
-if [ ! -f "$DTS_DIR/ipq8074.dtsi" ]; then
-    echo "创建 $DTS_DIR/ipq8074.dtsi ..."
-    cat > "$DTS_DIR/ipq8074.dtsi" << 'EOF'
+# 生成自包含的 ipq8074-512m.dtsi（合并基础内容）
+cat > "$DTS_DIR/ipq8074-512m.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
@@ -247,30 +245,7 @@ if [ ! -f "$DTS_DIR/ipq8074.dtsi" ]; then
 			     <GIC_PPI 4 IRQ_TYPE_LEVEL_LOW>,
 			     <GIC_PPI 1 IRQ_TYPE_LEVEL_LOW>;
 	};
-};
-EOF
-fi
 
-# 2. 确保其他依赖文件存在（从 files 目录复制，如果没有则创建基本版本）
-ARCH_DTS_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom"
-for file in ipq8074-512m.dtsi ipq8074-ac-cpu.dtsi ipq8074-ess.dtsi; do
-    src="$ARCH_DTS_DIR/$file"
-    dst="$DTS_DIR/$file"
-    if [ -f "$src" ]; then
-        cp "$src" "$dst"
-        echo "复制 $file 到 $DTS_DIR"
-    else
-        # 如果源文件不存在，则创建基本版本
-        echo "创建 $dst ..."
-        case "$file" in
-            ipq8074-512m.dtsi)
-                cat > "$dst" << 'EOF'
-// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
-
-#include "ipq8074.dtsi"
-
-/ {
 	memory@40000000 {
 		device_type = "memory";
 		reg = <0x0 0x40000000 0x0 0x20000000>;
@@ -328,9 +303,9 @@ for file in ipq8074-512m.dtsi ipq8074-ac-cpu.dtsi ipq8074-ess.dtsi; do
 	};
 };
 EOF
-                ;;
-            ipq8074-ac-cpu.dtsi)
-                cat > "$dst" << 'EOF'
+
+# 生成 ipq8074-ac-cpu.dtsi
+cat > "$DTS_DIR/ipq8074-ac-cpu.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
@@ -367,9 +342,9 @@ EOF
 	};
 };
 EOF
-                ;;
-            ipq8074-ess.dtsi)
-                cat > "$dst" << 'EOF'
+
+# 生成 ipq8074-ess.dtsi（仅宏定义）
+cat > "$DTS_DIR/ipq8074-ess.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-only
 
 #define ESS_PORT0			0
@@ -385,47 +360,29 @@ EOF
 #define MAC_MODE_SGMII		1
 #define MAC_MODE_QSGMII		2
 
-#define ESS_PORT0			0
-#define ESS_PORT1			1
-#define ESS_PORT2			2
-#define ESS_PORT3			3
-#define ESS_PORT4			4
-#define ESS_PORT5			5
-#define ESS_PORT6			6
-#define ESS_PORT7			7
-
 #define MAC_MODE_DISABLED	3
 EOF
-                ;;
-        esac
-    fi
-done
 
-# 3. 修改 ipq8071-ax3600.dtsi 中的配置
+# 修改 ipq8071-ax3600.dtsi
 DTS_FILE="$DTS_DIR/ipq8071-ax3600.dtsi"
 if [ -f "$DTS_FILE" ]; then
     echo "修改 $DTS_FILE ..."
-    # 修改 bootargs
     sed -i 's|root=/dev/ubiblock0_0|root=/dev/ubiblock0_1|' "$DTS_FILE"
-    # 修改 rootfs 分区大小（使用 0xf600000 即 246MB，避免溢出）
     sed -i 's/reg = <0xa00000 0xf000000>/reg = <0xa00000 0xf600000>/' "$DTS_FILE"
-    # 修改 WiFi 内存模式
     sed -i 's/qcom,ath11k-fw-memory-mode = <1>;/qcom,ath11k-fw-memory-mode = <2>;/' "$DTS_FILE"
-    echo "✅ DTS 修改完成"
 else
-    echo "❌ 错误：$DTS_FILE 不存在，请确保仓库中有该文件。"
+    echo "❌ 错误：$DTS_FILE 不存在"
     exit 1
 fi
 
-# 4. 删除有问题的内核补丁
+# 删除有问题的内核补丁
 PATCH_DIR="target/linux/qualcommax/patches-6.12"
 if [ -d "$PATCH_DIR" ]; then
-    for patch in 0036-v6.13-arm64-dts-qcom-ipq-change-labels-to-lower-case.patch \
-                 0122-arm64-dts-ipq8074-add-CPU-clock.patch \
-                 0123-arm64-dts-ipq8074-add-cooling-cells-to-CPU-nodes.patch; do
-        if [ -f "$PATCH_DIR/$patch" ]; then
-            echo "删除补丁: $PATCH_DIR/$patch"
-            rm -f "$PATCH_DIR/$patch"
+    # 删除所有以 0036、0122、0123、0130 开头的补丁，以及任何包含 ipq8074.dtsi 的补丁
+    for patch in "$PATCH_DIR"/0036*.patch "$PATCH_DIR"/0122*.patch "$PATCH_DIR"/0123*.patch "$PATCH_DIR"/0130*.patch; do
+        if [ -f "$patch" ]; then
+            echo "删除补丁: $patch"
+            rm -f "$patch"
         fi
     done
 fi
