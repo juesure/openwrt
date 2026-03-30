@@ -1,51 +1,25 @@
 #!/bin/bash
-WORK_DIR="/home/runner/work/openwrt/openwrt/workdir"
-OPENWRT_DIR="$WORK_DIR/openwrt"
-cd "$OPENWRT_DIR" || exit 1
+OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
+cd "$OPENWRT_ROOT" || exit 1
 
-echo "✅ DIY 脚本：检查 DTS 文件..."
-if [ -f target/linux/qualcommax/dts/ipq8071-ax3600.dtsi ]; then
-    echo "   ipq8071-ax3600.dtsi 存在"
-else
-    echo "❌ 错误：ipq8071-ax3600.dtsi 不存在"
-    exit 1
+DTS_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/"
+mkdir -p "$DTS_DIR"
+
+# 下载缺失的 ipq8074 系列 dtsi 文件
+for file in ipq8074.dtsi ipq8074-512m.dtsi ipq8074-ac-cpu.dtsi ipq8074-ess.dtsi; do
+    if [ ! -f "$DTS_DIR/$file" ]; then
+        echo "下载 $file ..."
+        wget -q -O "$DTS_DIR/$file" "https://raw.githubusercontent.com/openwrt/openwrt/main/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/$file"
+    fi
+done
+
+# 修改 ipq8071-ax3600.dtsi 中的 bootargs 和 rootfs 分区
+DTS_FILE="target/linux/qualcommax/dts/ipq8071-ax3600.dtsi"
+if [ -f "$DTS_FILE" ]; then
+    sed -i 's|root=/dev/ubiblock0_0|root=/dev/ubiblock0_1|' "$DTS_FILE"
+    sed -i 's/reg = <0xa00000 0xf000000>/reg = <0xa00000 0x10000000>/' "$DTS_FILE"
+    # 可选：修改 WiFi 内存模式
+    sed -i 's/qcom,ath11k-fw-memory-mode = <1>;/qcom,ath11k-fw-memory-mode = <2>;/' "$DTS_FILE"
 fi
-echo "✅ 准备就绪"
-#!/bin/bash
 
-echo "============================================="
-echo "  自动复制 ipq8074-512m.dtsi 到 dts 目录"
-echo "============================================="
-
-# 源文件路径
-SRC_FILE1="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-512m.dtsi"
-
-# 目标路径
-DST_DIR="target/linux/qualcommax/dts/"
-
-# 复制文件
-cp -f "$SRC_FILE1" "$DST_DIR"
-
-# 检查是否成功
-if [ -f "${DST_DIR}/ipq8074-512m.dtsi" ]; then
-  echo "✅ 复制成功！"
-else
-  echo "❌ 复制失败！"
-  exit 1
-fi
-# 源文件路径
-SRC_FILE2="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074-ac-cpu.dtsi"
-
-# 目标路径
-DST_DIR="target/linux/qualcommax/dts/"
-
-# 复制文件
-cp -f "$SRC_FILE2" "$DST_DIR"
-
-# 检查是否成功
-if [ -f "${DST_DIR}/ipq8074-512m.dtsi" ]; then
-  echo "✅ 复制成功！"
-else
-  echo "❌ 复制失败！"
-  exit 1
-fi
+echo "✅ DTS 准备完成"
