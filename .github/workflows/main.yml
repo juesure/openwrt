@@ -87,7 +87,7 @@ jobs:
           echo "============================================="
           
           # 使用单线程 + 详细输出，确保错误完整显示
-          make -j1 V=s 2>&1 | tee compile.log
+          make -j$(nproc) V=s 2>&1 | tee compile.log
           
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo -e "\n❌ 编译失败，显示最后 200 行错误信息"
