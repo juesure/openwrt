@@ -5,7 +5,20 @@ cd "$OPENWRT_ROOT" || exit 1
 DTS_DIR="target/linux/qualcommax/dts"
 mkdir -p "$DTS_DIR"
 
-# 1. 确保依赖的 dtsi 文件存在（如果不存在则创建）
+# 1. 复制或创建 ipq8074.dtsi（从 files 目录复制，如果存在）
+SRC_IPQ8074="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8074.dtsi"
+if [ -f "$SRC_IPQ8074" ]; then
+    cp "$SRC_IPQ8074" "$DTS_DIR/ipq8074.dtsi"
+    echo "复制 $SRC_IPQ8074 到 $DTS_DIR"
+else
+    # 如果不存在，则创建（使用您提供的完整内容）
+    cat > "$DTS_DIR/ipq8074.dtsi" << 'EOF'
+// 您之前提供的完整 ipq8074.dtsi 内容
+// 请将完整内容粘贴在此
+EOF
+fi
+
+# 2. 确保其他依赖文件存在
 # ipq8074-512m.dtsi
 if [ ! -f "$DTS_DIR/ipq8074-512m.dtsi" ]; then
     cat > "$DTS_DIR/ipq8074-512m.dtsi" << 'EOF'
@@ -137,7 +150,7 @@ if [ ! -f "$DTS_DIR/ipq8074-ess.dtsi" ]; then
 EOF
 fi
 
-# 2. 修改 ipq8071-ax3600.dtsi 中的 include 路径和参数
+# 3. 修改 ipq8071-ax3600.dtsi 中的 include 路径和参数
 DTS_FILE="$DTS_DIR/ipq8071-ax3600.dtsi"
 if [ -f "$DTS_FILE" ]; then
     # 修复 include 路径（去除可能的长路径）
@@ -156,10 +169,9 @@ else
     echo "⚠️ 未找到 $DTS_FILE，跳过修改"
 fi
 
-# 3. 删除有问题的内核补丁
+# 4. 删除有问题的内核补丁
 PATCH_DIR="target/linux/qualcommax/patches-6.12"
 if [ -d "$PATCH_DIR" ]; then
-    # 删除已知导致失败的补丁（可根据日志持续补充）
     for patch in 0036 0111 0122 0123 0130; do
         rm -f "$PATCH_DIR"/${patch}*.patch 2>/dev/null
     done
