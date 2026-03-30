@@ -159,7 +159,8 @@ fi
 # 3. 删除有问题的内核补丁
 PATCH_DIR="target/linux/qualcommax/patches-6.12"
 if [ -d "$PATCH_DIR" ]; then
-    for patch in 0036 0122 0123 0130; do
+    # 删除已知导致失败的补丁（可根据日志持续补充）
+    for patch in 0036 0111 0122 0123 0130; do
         rm -f "$PATCH_DIR"/${patch}*.patch 2>/dev/null
     done
     echo "✅ 已删除有问题的内核补丁"
