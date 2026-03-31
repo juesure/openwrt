@@ -4,7 +4,7 @@ name: Build Redmi AX6 (256M)
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPO_URL: https://github.com/juesure/openwrt/
-  REPO_BRANCH: juesure-patch-1
+  REPO_BRANCH: AX6_256M_FLASH_OPW_V1.0
   DIY_SCRIPT: /home/runner/work/openwrt/openwrt/scripts/diy-ax6-256m.sh
   CONFIG_FILE: /home/runner/work/openwrt/openwrt/config/ax6-256m.config
   TZ: Asia/Shanghai
@@ -13,7 +13,7 @@ env:
 
 on:
   push:
-    branches: [juesure-patch-1]
+    branches: [AX6_256M_FLASH_OPW_V1.0]
   workflow_dispatch:
 
 jobs:
