@@ -102,10 +102,10 @@ jobs:
           cd "$WORK_DIR/openwrt"
           
           echo "============================================="
-          echo "        单线程详细编译（V=s）"
+          echo "        多线程详细编译（V=s）"
           echo "============================================="
           
-          # 使用单线程 + 详细输出，确保错误完整显示
+          # 使用多线程 + 详细输出，确保错误完整显示
           make -j$(nproc) V=s 2>&1 | tee compile.log
           
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
@@ -120,41 +120,48 @@ jobs:
              ls "$FIRMWARE_DIR"/*redmi_ax6*.ubi 1>/dev/null 2>&1; then
             echo -e "\n✅ 固件编译成功！"
             echo "status=success" >> $GITHUB_OUTPUT
+            echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
             ls -lh "$FIRMWARE_DIR"/*redmi_ax6*
           else
             echo -e "\n❌ 未找到固件文件"
             echo "status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
-  
-      - name: Package & Release
+
+      - name: Generate Firmware
         if: steps.compile.outputs.status == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cd "$FIRMWARE_OUTPUT_DIR" || exit 1
+          BUILD_TIME="${{ env.BUILD_TIME }}"
+          
+          # 列出所有生成的文件（调试用）
+          echo "📂 编译输出目录内容："
+          ls -lh
+          
+          # 准备发布目录
           mkdir -p /home/runner/firmware
-          cd "$FIRMWARE_OUTPUT_DIR"
           
-          cp *redmi_ax6*sysupgrade.bin /home/runner/firmware/ 2>/dev/null || true
-          cp *redmi_ax6*factory.ubi /home/runner/firmware/ 2>/dev/null || true
-          cp *redmi_ax6*rootfs.ubi /home/runner/firmware/ 2>/dev/null || true
+          # 复制 sysupgrade.bin 文件
+          cp *redmi_ax6*.bin /home/runner/firmware/ 2>/dev/null || true
           
-          if ls /home/runner/firmware/*.ubi 1>/dev/null 2>&1; then
-            FIRST_UBI=$(ls /home/runner/firmware/*.ubi | head -1)
-            cp "$FIRST_UBI" /home/runner/firmware/redmi_ax6_mtd12_ubi.bin
+          # 复制 UBI 文件（如果存在）
+          cp *factory.ubi /home/runner/firmware/ 2>/dev/null || true
+          cp *rootfs.ubi /home/runner/firmware/ 2>/dev/null || true
+          
+          # 如果既没有 factory.ubi 也没有 rootfs.ubi，尝试从 sysupgrade.bin 提取
+          if ! ls /home/runner/firmware/*.ubi 1>/dev/null 2>&1; then
+              SYSUPGRADE=$(ls *sysupgrade.bin | head -1)
+              if [ -n "$SYSUPGRADE" ]; then
+                  dd if="$SYSUPGRADE" of=/home/runner/firmware/redmi_ax6_full.ubi bs=1M skip=4
+                  echo "✅ 已从 sysupgrade.bin 提取完整 UBI 镜像 (redmi_ax6_full.ubi)"
+              fi
           fi
           
-          cd /home/runner/firmware
-          md5sum * > md5sum.txt
-          
-          BUILD_TIME=$(date +%Y%m%d_%H%M)
-          RELEASE_TAG="AX6-256M-$BUILD_TIME"
-          
-          gh release create "$RELEASE_TAG" ./* \
-            -R ${GITHUB_REPOSITORY} \
-            --title "Redmi AX6 256M Flash 固件 $BUILD_TIME" \
-            --notes "适配256MB Flash的OpenWrt固件" \
-            || echo "Release创建失败"
+          # 发布 Release
+          gh release create "AX6-256M-${BUILD_TIME}" --title "Redmi AX6 256M ${BUILD_TIME}" --notes "Redmi AX6 256M Firmware" /home/runner/firmware/* 2>/dev/null || printf "⚠️ Release已存在\n"
+          printf "✅ 固件发布完成\n"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
