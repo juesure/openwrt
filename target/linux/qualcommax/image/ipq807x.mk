@@ -425,6 +425,7 @@ define Device/qnap_301w
 	DEVICE_PACKAGES := kmod-fs-f2fs f2fs-tools ipq-wifi-qnap_301w
 endef
 TARGET_DEVICES += qnap_301w
+
 define Device/redmi_ax6
 	$(call Device/xiaomi_ax3600)
 	DEVICE_VENDOR := Redmi
@@ -447,13 +448,13 @@ define Device/redmi_ax6
 		luci-app-store \
 		luci-lib-store \
 		luci-i18n-store-zh-cn \
+		luci-i18n-base-zh-cn \
 		coreutils \
 		curl \
 		wget \
 		dropbear \
 		block-mount
 endef
-
 TARGET_DEVICES += redmi_ax6
 
 define Device/spectrum_sax1v1k
