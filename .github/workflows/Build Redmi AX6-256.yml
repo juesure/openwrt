@@ -133,22 +133,30 @@ jobs:
         run: |
           cd "$FIRMWARE_OUTPUT_DIR" || exit 1
           BUILD_TIME="${{ env.BUILD_TIME }}"
-          # 查找固件
-          FIRMWARE_BIN=$(ls *redmi_ax6*.bin 2>/dev/null | head -1)
-          [ -z "$FIRMWARE_BIN" ] && { printf "❌ 未找到固件\n"; exit 1; }
-          # 生成编程器固件
-          printf "📦 生成256M编程器固件...\n"
-          dd if=/dev/zero of=ax6-256m.img bs=1M count=256 > /dev/null 2>&1
-          dd if="$FIRMWARE_BIN" of=ax6-256m.img bs=1M seek=251 conv=notrunc > /dev/null 2>&1
-          zip -r "ax6-256m-${BUILD_TIME}.zip" ax6-256m.img > /dev/null 2>&1
-          # 复制固件
+          
+          # 列出所有生成的文件（调试用）
+          echo "📂 编译输出目录内容："
+          ls -lh
+          
+          # 准备发布目录
           mkdir -p /home/runner/firmware
-          #cp *redmi_ax6*.bin "ax6-256m-${BUILD_TIME}.zip" /home/runner/firmware/
-          # 复制所有固件文件（包括 sysupgrade.bin, rootfs.ubi, factory.ubi 等）
-          cp *redmi_ax6*.bin "ax6-256m-${BUILD_TIME}.zip" /home/runner/firmware/
-          cp *rootfs.ubi /home/runner/firmware/ 2>/dev/null || true
-          cp *factory.ubi /home/runner/firmware/ 2>/dev/null || true
-          # 发布Release（用--notes替代--body）
+          
+          # 复制 sysupgrade.bin 文件
+          cp *redmi_ax6*.bin /home/runner/firmware/ 2>/dev/null || true
+          
+          # 复制 UBI 文件（如果存在）
+          cp *ubi /home/runner/firmware/ 2>/dev/null || true
+          
+          # 如果仍没有 rootfs.ubi，尝试从 sysupgrade.bin 提取
+          if ! ls /home/runner/firmware/*rootfs.ubi 1>/dev/null 2>&1; then
+              SYSUPGRADE=$(ls *sysupgrade.bin | head -1)
+              if [ -n "$SYSUPGRADE" ]; then
+                  dd if="$SYSUPGRADE" of=/home/runner/firmware/redmi_ax6_rootfs.ubi bs=1M skip=4
+                  echo "✅ 已从 sysupgrade.bin 提取 rootfs.ubi"
+              fi
+          fi
+          
+          # 发布 Release（独立附件）
           gh release create "AX6-256M-${BUILD_TIME}" --title "Redmi AX6 256M ${BUILD_TIME}" --notes "Redmi AX6 256M Firmware" /home/runner/firmware/* 2>/dev/null || printf "⚠️ Release已存在\n"
           printf "✅ 固件发布完成\n"
         env:
