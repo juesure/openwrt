@@ -145,8 +145,7 @@
 					macaddr_dp3: macaddr@6 { reg = <0x6 0x6>; };
 					macaddr_dp4: macaddr@c { reg = <0xc 0x6>; };
 					macaddr_dp5: macaddr@12 { reg = <0x12 0x6>; };
-
-					caldata_wifi: caldata@4d000 { reg = <0x4d000 0x844>; };
+					caldata_qca9889: caldata@4d000 { reg = <0x4d000 0x844>; };
 				};
 			};
 
@@ -253,6 +252,6 @@
 &wifi {
 	status = "okay";
 	qcom,ath11k-calibration-variant = "Redmi-AX6";
-	nvmem-cells = <&caldata_wifi>;
+	nvmem-cells = <&caldata_qca9889>;
 	nvmem-cell-names = "calibration";
 };
