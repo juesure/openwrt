@@ -99,68 +99,62 @@ jobs:
       - name: Compile
         id: compile
         run: |
-          OPENWRT_SRC="$WORK_DIR/openwrt"
-          cd "$OPENWRT_SRC" || exit 1
-          # 下载依赖（静默模式）
-          printf "📥 下载编译依赖...\n"
-          make download -j$(nproc) > /dev/null 2>&1 || make download -j1 > /dev/null 2>&1
-          find dl -size -1024c -exec rm -f {} \;
-          # 编译工具链
-          printf "🔨 编译工具链...\n"
-          make tools/compile -j$(nproc) V=s > /dev/null 2>&1 || { printf "❌ 工具链编译失败\n"; exit 1; }
-          # 编译固件
-          printf "🔨 编译固件（多线程）...\n"
-          make -j$(nproc) > /dev/null 2>&1
-          COMPILE_STATUS=$?
-          # 单线程重试
-          if [ $COMPILE_STATUS -ne 0 ]; then
-              printf "⚠️ 多线程编译失败，单线程重试...\n"
-              make -j1 V=s > /dev/null 2>&1
-              COMPILE_STATUS=$?
+          cd "$WORK_DIR/openwrt"
+          
+          echo "============================================="
+          echo "        单线程详细编译（V=s）"
+          echo "============================================="
+          
+          # 使用单线程 + 详细输出，确保错误完整显示
+          make -j$(nproc) V=s 2>&1 | tee compile.log
+          
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo -e "\n❌ 编译失败，显示最后 200 行错误信息"
+            tail -200 compile.log
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
           fi
-          # 校验结果
-          if [ $COMPILE_STATUS -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
-              printf "✅ 固件编译成功\n"
-              echo "status=success" >> "$GITHUB_OUTPUT"
-              echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
+          
+          FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
+          if ls "$FIRMWARE_DIR"/*redmi_ax6*sysupgrade.bin 1>/dev/null 2>&1 || \
+             ls "$FIRMWARE_DIR"/*redmi_ax6*.ubi 1>/dev/null 2>&1; then
+            echo -e "\n✅ 固件编译成功！"
+            echo "status=success" >> $GITHUB_OUTPUT
+            ls -lh "$FIRMWARE_DIR"/*redmi_ax6*
           else
-              printf "❌ 固件未生成\n"
-              exit 1
+            echo -e "\n❌ 未找到固件文件"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
           fi
-
-      - name: Generate Firmware
+  
+      - name: Package & Release
         if: steps.compile.outputs.status == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd "$FIRMWARE_OUTPUT_DIR" || exit 1
-          BUILD_TIME="${{ env.BUILD_TIME }}"
-          
-          # 列出所有生成的文件（调试用）
-          echo "📂 编译输出目录内容："
-          ls -lh
-          
-          # 准备发布目录
           mkdir -p /home/runner/firmware
+          cd "$FIRMWARE_OUTPUT_DIR"
           
-          # 复制 sysupgrade.bin 文件
-          cp *redmi_ax6*.bin /home/runner/firmware/ 2>/dev/null || true
+          cp *redmi_ax6*sysupgrade.bin /home/runner/firmware/ 2>/dev/null || true
+          cp *redmi_ax6*factory.ubi /home/runner/firmware/ 2>/dev/null || true
+          cp *redmi_ax6*rootfs.ubi /home/runner/firmware/ 2>/dev/null || true
           
-          # 复制 UBI 文件（如果存在）
-          cp *ubi /home/runner/firmware/ 2>/dev/null || true
-          
-          # 如果仍没有 rootfs.ubi，尝试从 sysupgrade.bin 提取
-          if ! ls /home/runner/firmware/*rootfs.ubi 1>/dev/null 2>&1; then
-              SYSUPGRADE=$(ls *sysupgrade.bin | head -1)
-              if [ -n "$SYSUPGRADE" ]; then
-                  dd if="$SYSUPGRADE" of=/home/runner/firmware/redmi_ax6_rootfs.ubi bs=1M skip=4
-                  echo "✅ 已从 sysupgrade.bin 提取 rootfs.ubi"
-              fi
+          if ls /home/runner/firmware/*.ubi 1>/dev/null 2>&1; then
+            FIRST_UBI=$(ls /home/runner/firmware/*.ubi | head -1)
+            cp "$FIRST_UBI" /home/runner/firmware/redmi_ax6_mtd12_ubi.bin
           fi
           
-          # 发布 Release（独立附件）
-          gh release create "AX6-256M-${BUILD_TIME}" --title "Redmi AX6 256M ${BUILD_TIME}" --notes "Redmi AX6 256M Firmware" /home/runner/firmware/* 2>/dev/null || printf "⚠️ Release已存在\n"
-          printf "✅ 固件发布完成\n"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cd /home/runner/firmware
+          md5sum * > md5sum.txt
+          
+          BUILD_TIME=$(date +%Y%m%d_%H%M)
+          RELEASE_TAG="AX6-256M-$BUILD_TIME"
+          
+          gh release create "$RELEASE_TAG" ./* \
+            -R ${GITHUB_REPOSITORY} \
+            --title "Redmi AX6 256M Flash 固件 $BUILD_TIME" \
+            --notes "适配256MB Flash的OpenWrt固件" \
+            || echo "Release创建失败"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
