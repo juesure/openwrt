@@ -7,7 +7,7 @@
 
 / {
 	model = "Redmi AX6";
-	compatible = "redmi,ax6", "qcom,ipq8074";
+	compatible = "redmi,ax6", "qcom,ipq8071";
 
 	leds {
 		compatible = "gpio-leds";
