@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
+#include "ipq8074-512m.dtsi"
+#include "ipq8074-ac-cpu.dtsi"
+#include "ipq8074-ess.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 
@@ -30,6 +33,24 @@
 	};
 };
 
+&tlmm {
+	mdio_pins: mdio-pins {
+		mdc {
+			pins = "gpio68";
+			function = "mdc";
+			drive-strength = <8>;
+			bias-pull-up;
+		};
+
+		mdio {
+			pins = "gpio69";
+			function = "mdio";
+			drive-strength = <8>;
+			bias-pull-up;
+		};
+	};
+};
+
 &blsp1_uart5 {
 	status = "okay";
 };
@@ -50,26 +71,22 @@
 	status = "okay";
 };
 
-&tlmm {
-	mdio_pins: mdio-pins {
-		mdc {
-			pins = "gpio68";
-			function = "mdc";
-			drive-strength = <8>;
-			bias-pull-up;
-		};
-
-		mdio {
-			pins = "gpio69";
-			function = "mdio";
-			drive-strength = <8>;
-			bias-pull-up;
-		};
-	};
-};
-
 &qpic_nand {
 	status = "okay";
+
+	/*
+	 * Bootloader will find the NAND DT node by the compatible and
+	 * then "fixup" it by adding the partitions from the SMEM table
+	 * using the legacy bindings thus making it impossible for us
+	 * to change the partition table or utilize NVMEM for calibration.
+	 * So add a dummy partitions node that bootloader will populate
+	 * and set it as disabled so the kernel ignores it instead of
+	 * printing warnings due to the broken way bootloader adds the
+	 * partitions.
+	 */
+	partitions {
+		status = "disabled";
+	};
 
 	nand@0 {
 		reg = <0>;
@@ -167,10 +184,12 @@
 			};
 
 			partition@900000 {
+				/* This is crash + crash_syslog parts combined */
 				label = "pstore";
 				reg = <0x900000 0x100000>;
 			};
 
+			/* 单个 rootfs 分区（UBI），大小 246MB */
 			partition@a00000 {
 				label = "rootfs";
 				reg = <0xa00000 0xf600000>;
@@ -188,6 +207,7 @@
 
 &mdio {
 	status = "okay";
+
 	pinctrl-0 = <&mdio_pins>;
 	pinctrl-names = "default";
 	reset-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
@@ -222,9 +242,10 @@
 
 &switch {
 	status = "okay";
-	switch_lan_bmp = <(3 | 4 | 5)>;
-	switch_wan_bmp = <2>;
-	switch_mac_mode = <0>;
+
+	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>; /* lan port bitmap */
+	switch_wan_bmp = <ESS_PORT2>; /* wan port bitmap */
+	switch_mac_mode = <MAC_MODE_PSGMII>; /* mac mode for uniphy instance0*/
 
 	qcom,port_phyinfo {
 		port@2 {
@@ -284,5 +305,6 @@
 
 &wifi {
 	status = "okay";
+
 	qcom,ath11k-fw-memory-mode = <2>;
 };
