@@ -425,33 +425,35 @@ define Device/qnap_301w
 	DEVICE_PACKAGES := kmod-fs-f2fs f2fs-tools ipq-wifi-qnap_301w
 endef
 TARGET_DEVICES += qnap_301w
-
-# 修复 Redmi AX6 配置：十六进制转十进制，解决 JSON 脚本转换错误
 define Device/redmi_ax6
-    $(call Device/xiaomi_ax3600)
-    DEVICE_VENDOR := Redmi
-    DEVICE_MODEL := AX6
-    DEVICE_PACKAGES := ipq-wifi-redmi_ax6
-
-    # 核心修复：所有数值改用十进制（避免 Python 转换报错）
-    # 256M Flash = 268435456 字节（替代 0x20000000）
-    # 128KiB 擦除块 = 131072 字节（标准化写法）
-    PAGESIZE := 2048
-    BLOCKSIZE := 131072  # 替代 128KiB，纯十进制
-    UBI_OPTS := -m 2048 -p 131072 -s 2048
-
-    # 240MB rootfs = 251658240 字节（替代 0xE800000）
-    ROOTFS_SIZE := 251658240
-    # 256MB 总固件大小（十进制）
-    IMAGE_SIZE := 268435456
-
-    # 修复固件打包逻辑，强制 UBIFS 并检查大小
-    IMAGE/factory.bin := append-ubi | check-size $$$$(IMAGE_SIZE)
-    IMAGE/sysupgrade.bin := append-ubi | sysupgrade-tar rootfs=$$$$@ | check-size $$$$(IMAGE_SIZE)
-    
-    # 禁用 fwupd 相关组件，解决递归依赖
-    DEVICE_PACKAGES += -fwupd -fwupd-libs
+	$(call Device/xiaomi_ax3600)
+	DEVICE_VENDOR := Redmi
+	DEVICE_MODEL := AX6
+	IMAGE_SIZE := 262144k
+	UBINIZE_OPTS := -E 5 -m 2048 -p 128KiB -s 2048 -O 2048
+	KERNEL_IN_UBI := 1
+	IMAGES += factory.ubi
+	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
+	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 \
+		kmod-ath11k-ahb \
+		ath11k-firmware-ipq8071 \
+		ath11k-firmware-ipq8074 \
+		uhttpd \
+		uhttpd-mod-ubus \
+		luci \
+		luci-base \
+		luci-mod-admin-full \
+		luci-theme-argon \
+		luci-app-store \
+		luci-lib-store \
+		luci-i18n-store-zh-cn \
+		coreutils \
+		curl \
+		wget \
+		dropbear \
+		block-mount
 endef
+
 TARGET_DEVICES += redmi_ax6
 
 define Device/spectrum_sax1v1k
