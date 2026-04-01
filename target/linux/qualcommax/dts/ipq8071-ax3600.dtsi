@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
 #include "ipq8074-512m.dtsi"
 #include "ipq8074-ac-cpu.dtsi"
@@ -18,7 +19,7 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
-		bootargs-append = "ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
+		bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
 	};
 
 	keys {
@@ -141,11 +142,24 @@
 					#address-cells = <1>;
 					#size-cells = <1>;
 
-					macaddr_dp2: macaddr@0 { reg = <0x0 0x6>; };
-					macaddr_dp3: macaddr@6 { reg = <0x6 0x6>; };
-					macaddr_dp4: macaddr@c { reg = <0xc 0x6>; };
-					macaddr_dp5: macaddr@12 { reg = <0x12 0x6>; };
-					caldata_qca9889: caldata@4d000 { reg = <0x4d000 0x844>; };
+					/* 修正 MAC 地址偏移 */
+					macaddr_dp2: macaddr@6 {
+						reg = <0x6 0x6>;
+					};
+					macaddr_dp3: macaddr@c {
+						reg = <0xc 0x6>;
+					};
+					macaddr_dp4: macaddr@12 {
+						reg = <0x12 0x6>;
+					};
+					macaddr_dp5: macaddr@18 {
+						reg = <0x18 0x6>;
+					};
+
+					/* 修正 WiFi 校准数据偏移（2.4GHz） */
+					caldata_qca9889: caldata@33000 {
+						reg = <0x33000 0x844>;
+					};
 				};
 			};
 
@@ -164,12 +178,14 @@
 				reg = <0x980000 0x80000>;
 			};
 
+			/* rootfs 分区，大小 240MB */
 			partition@a00000 {
 				label = "rootfs";
 				reg = <0xa00000 0xf000000>;
 				compatible = "openwrt,ubi";
 			};
 
+			/* 保留分区 */
 			partition@fa00000 {
 				label = "rsvd0";
 				reg = <0xfa00000 0x80000>;
@@ -192,24 +208,52 @@
 		compatible = "qcom,qca8075-package";
 		reg = <0>;
 
-		qca8075_1: ethernet-phy@1 { reg = <1>; };
-		qca8075_2: ethernet-phy@2 { reg = <2>; };
-		qca8075_3: ethernet-phy@3 { reg = <3>; };
-		qca8075_4: ethernet-phy@4 { reg = <4>; };
+		qca8075_1: ethernet-phy@1 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <1>;
+		};
+
+		qca8075_2: ethernet-phy@2 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <2>;
+		};
+
+		qca8075_3: ethernet-phy@3 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <3>;
+		};
+
+		qca8075_4: ethernet-phy@4 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <4>;
+		};
 	};
 };
 
 &switch {
 	status = "okay";
+
 	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>;
 	switch_wan_bmp = <ESS_PORT2>;
 	switch_mac_mode = <MAC_MODE_PSGMII>;
 
 	qcom,port_phyinfo {
-		port@2 { port_id = <2>; phy_address = <1>; };
-		port@3 { port_id = <3>; phy_address = <2>; };
-		port@4 { port_id = <4>; phy_address = <3>; };
-		port@5 { port_id = <5>; phy_address = <4>; };
+		port@2 {
+			port_id = <2>;
+			phy_address = <1>;
+		};
+		port@3 {
+			port_id = <3>;
+			phy_address = <2>;
+		};
+		port@4 {
+			port_id = <4>;
+			phy_address = <3>;
+		};
+		port@5 {
+			port_id = <5>;
+			phy_address = <4>;
+		};
 	};
 };
 
@@ -252,6 +296,9 @@
 &wifi {
 	status = "okay";
 	qcom,ath11k-calibration-variant = "Redmi-AX6";
+	/* 添加内存模式以优化性能 */
+	qcom,ath11k-fw-memory-mode = <2>;
+	/* 引用修正后的校准数据 */
 	nvmem-cells = <&caldata_qca9889>;
 	nvmem-cell-names = "calibration";
 };
