@@ -431,6 +431,10 @@ define Device/redmi_ax6
 	DEVICE_VENDOR := Redmi
 	DEVICE_MODEL := AX6
 	DEVICE_PACKAGES := ipq-wifi-redmi_ax6
+	IMAGE_SIZE := 262144k
+    KERNEL_IN_UBI := 1
+	IMAGES += factory.ubi
+	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
 endef
 TARGET_DEVICES += redmi_ax6
 
