@@ -5,7 +5,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPO_URL: https://github.com/juesure/openwrt/
   REPO_BRANCH: AX6_256M_FLASH_V1.1
-  DIY_SCRIPT: /home/runner/work/openwrt/openwrt/scripts/diy-ax6-256m.sh
+  DIY_SCRIPT: /home/runner/work/openwrt/openwrt/scripts/diy_scripts.sh
   CONFIG_FILE: /home/runner/work/openwrt/openwrt/config/my_config.config
   TZ: Asia/Shanghai
   WORK_DIR: /home/runner/work/openwrt/openwrt/workdir
