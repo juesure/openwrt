@@ -1,6 +1,5 @@
 name: Build Redmi AX6 (256M)
 
-# 全局环境变量（兼容 Node.js 24 + 路径配置）
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPO_URL: https://github.com/juesure/openwrt/
@@ -35,8 +34,8 @@ jobs:
         run: |
           # 清理冗余文件
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          # 安装依赖（单行书写，无换行错误）
-          sudo apt update -y && sudo apt full-upgrade -y && sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod zip gh
+          # 安装依赖
+          sudo apt update -y && sudo apt full-upgrade -y && sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod zip gh lz4 lzop m4
           # 设置时区
           sudo timedatectl set-timezone "$TZ"
           # 创建目录 + 校验文件
@@ -48,7 +47,6 @@ jobs:
       - name: Clone Source
         run: |
           cd "$WORK_DIR" || { printf "❌ 进入工作目录失败\n"; exit 1; }
-          # 克隆源码（单行命令，无换行）
           for i in {1..3}; do git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt && break; rm -rf openwrt; sleep 5; done
           [ ! -d "$WORK_DIR/openwrt" ] && { printf "❌ 源码克隆失败\n"; exit 1; }
           ln -sf "$WORK_DIR/openwrt" /home/runner/work/openwrt/openwrt/openwrt
@@ -61,7 +59,7 @@ jobs:
           cd "$OPENWRT_SRC" || exit 1
           printf "🔧 当前工作目录：%s\n" "$(pwd)"
           
-          # 强制赋予DIY脚本可执行权限（核心修复）
+          # 赋予DIY脚本可执行权限
           chmod +x "$DIY_SCRIPT"
           if [ ! -x "$DIY_SCRIPT" ]; then
               printf "❌ 赋予DIY脚本权限失败：%s\n" "$DIY_SCRIPT"
@@ -70,9 +68,7 @@ jobs:
           
           # 执行DIY脚本
           "$DIY_SCRIPT" || {
-              printf "❌ DIY脚本执行失败（日志：）\n"
-              # 输出脚本内容，便于调试（可选）
-              cat "$DIY_SCRIPT" 2>/dev/null
+              printf "❌ DIY脚本执行失败\n"
               exit 1
           }
           
@@ -95,7 +91,6 @@ jobs:
           make defconfig -e > /dev/null 2>&1
           printf "✅ Preprocess 步骤完成\n"
 
-      # ========== 核心修复：Compile 步骤（无任何语法错误） ==========
       - name: Compile
         id: compile
         run: |
@@ -105,7 +100,6 @@ jobs:
           echo "        多线程详细编译（V=s）"
           echo "============================================="
           
-          # 使用多线程 + 详细输出，确保错误完整显示
           make -j$(nproc) V=s 2>&1 | tee compile.log
           
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
