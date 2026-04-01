@@ -437,7 +437,9 @@ define Device/redmi_ax6
 	IMAGE/factory.ubi := append-ubi | check-size $$$$(IMAGE_SIZE)
 	DEVICE_PACKAGES := ipq-wifi-redmi_ax6 \
 		kmod-ath11k-ahb \
-		ath11k-firmware-ipq8071 \
+		kmod-qca-nss-dp \
+		kmod-qca-ssdk \
+		qca-nss-firmware \
 		ath11k-firmware-ipq8074 \
 		uhttpd \
 		uhttpd-mod-ubus \
