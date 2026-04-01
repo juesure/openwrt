@@ -440,7 +440,7 @@ define Device/redmi_ax6
 		kmod-qca-nss-dp \
 		kmod-qca-ssdk \
 		qca-nss-firmware \
-		ath11k-firmware-ipq8074 \
+		ath11k-firmware-ipq8071 \
 		uhttpd \
 		uhttpd-mod-ubus \
 		luci \
