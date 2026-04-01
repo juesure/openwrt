@@ -439,6 +439,10 @@ define Device/redmi_ax6
 		kmod-ath11k-ahb \
 		ath11k-firmware-ipq8071 \
 		ath11k-firmware-ipq8074 \
+	    kmod-qca-nss-dp \
+	    kmod-qca-ssdk \
+	    qca-nss-firmware \
+	    ath11k-firmware-ipq8074
 		uhttpd \
 		uhttpd-mod-ubus \
 		luci \
