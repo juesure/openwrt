@@ -2,7 +2,8 @@
 #
 # Copyright (C) 2021 Robert Marko <robimarko@gmail.com>
 
-include ./common.mk
+DTS_DIR := $(DTS_DIR)/qcom
+DEVICE_VARS += NETGEAR_BOARD_ID NETGEAR_HW_ID TPLINK_SUPPORT_STRING ZYXEL_MODEL_ID
 
 define Build/asus-fake-ramdisk
 	rm -rf $(KDIR)/tmp/fakerd
