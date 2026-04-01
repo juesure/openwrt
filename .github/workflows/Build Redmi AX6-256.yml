@@ -105,20 +105,17 @@ jobs:
           printf "📥 下载编译依赖...\n"
           make download -j$(nproc) > /dev/null 2>&1 || make download -j1 > /dev/null 2>&1
           find dl -size -1024c -exec rm -f {} \;
-          # 编译工具链
+          # 编译工具链（保留日志）
           printf "🔨 编译工具链...\n"
-          make tools/compile -j$(nproc) V=s > /dev/null 2>&1 || { printf "❌ 工具链编译失败\n"; exit 1; }
-          # 编译固件
-          printf "🔨 编译固件（多线程）...\n"
-          #make -j$(nproc) > /dev/null 2>&1
-          make -j$(nproc) 2>&1 | tee compile.log
-          COMPILE_STATUS=$?
-          # 单线程重试
-          if [ $COMPILE_STATUS -ne 0 ]; then
-              printf "⚠️ 多线程编译失败，单线程重试...\n"
-              make -j1 V=s > /dev/null 2>&1
-              COMPILE_STATUS=$?
+          make tools/compile -j$(nproc) V=s 2>&1 | tee tools-compile.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+              printf "❌ 工具链编译失败\n"
+              exit 1
           fi
+          # 编译固件（单线程，完整日志）
+          printf "🔨 编译固件（单线程）...\n"
+          make -j1 V=s 2>&1 | tee compile.log
+          COMPILE_STATUS=${PIPESTATUS[0]}
           # 校验结果
           if [ $COMPILE_STATUS -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
               printf "✅ 固件编译成功\n"
