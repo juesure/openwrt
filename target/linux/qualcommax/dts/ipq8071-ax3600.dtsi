@@ -19,7 +19,7 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
-		bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
+		bootargs-append = " root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
 	};
 
 	keys {
@@ -29,6 +29,24 @@
 			label = "reset";
 			gpios = <&tlmm 34 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_RESTART>;
+		};
+	};
+};
+
+&tlmm {
+	mdio_pins: mdio-pins {
+		mdc {
+			pins = "gpio68";
+			function = "mdc";
+			drive-strength = <8>;
+			bias-pull-up;
+		};
+
+		mdio {
+			pins = "gpio69";
+			function = "mdio";
+			drive-strength = <8>;
+			bias-pull-up;
 		};
 	};
 };
@@ -53,26 +71,22 @@
 	status = "okay";
 };
 
-&tlmm {
-	mdio_pins: mdio-pins {
-		mdc {
-			pins = "gpio68";
-			function = "mdc";
-			drive-strength = <8>;
-			bias-pull-up;
-		};
-
-		mdio {
-			pins = "gpio69";
-			function = "mdio";
-			drive-strength = <8>;
-			bias-pull-up;
-		};
-	};
-};
-
 &qpic_nand {
 	status = "okay";
+
+	/*
+	 * Bootloader will find the NAND DT node by the compatible and
+	 * then "fixup" it by adding the partitions from the SMEM table
+	 * using the legacy bindings thus making it impossible for us
+	 * to change the partition table or utilize NVMEM for calibration.
+	 * So add a dummy partitions node that bootloader will populate
+	 * and set it as disabled so the kernel ignores it instead of
+	 * printing warnings due to the broken way bootloader adds the
+	 * partitions.
+	 */
+	partitions {
+		status = "disabled";
+	};
 
 	nand@0 {
 		reg = <0>;
@@ -158,7 +172,7 @@
 						reg = <0x18 0x6>;
 					};
 
-					caldata_qca9889: caldata@33000 {
+					caldata_qca9889: caldata@4d000 {
 						reg = <0x33000 0x844>;
 					};
 				};
@@ -170,20 +184,24 @@
 			};
 
 			partition@900000 {
+				/* This is crash + crash_syslog parts combined */
 				label = "pstore";
 				reg = <0x900000 0x100000>;
 			};
 
+			/* Make the first rootfs a dedicated ubi partition for kernel */
 			partition@a00000 {
 				label = "rootfs";
 				reg = <0xa00000 0xf000000>;
 				compatible = "openwrt,ubi";
 			};
 
-			partition@fa00000 {
+			/* Place the real rootfs in the original second rootfs and
+			 * expand it to the end of the nand
+			 */
+			rootfs: partition@fa00000 {
 				label = "rsvd0";
 				reg = <0xfa00000 0x80000>;
-				read-only;
 			};
 		};
 	};
@@ -226,9 +244,10 @@
 
 &switch {
 	status = "okay";
-	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>;
-	switch_wan_bmp = <ESS_PORT2>;
-	switch_mac_mode = <MAC_MODE_PSGMII>;
+
+	switch_lan_bmp = <(ESS_PORT3 | ESS_PORT4 | ESS_PORT5)>; /* lan port bitmap */
+	switch_wan_bmp = <ESS_PORT2>; /* wan port bitmap */
+	switch_mac_mode = <MAC_MODE_PSGMII>; /* mac mode for uniphy instance0*/
 
 	qcom,port_phyinfo {
 		port@2 {
@@ -288,8 +307,6 @@
 
 &wifi {
 	status = "okay";
-	qcom,ath11k-calibration-variant = "Redmi-AX6";
-	qcom,ath11k-fw-memory-mode = <2>;
-	nvmem-cells = <&caldata_qca9889>;
-	nvmem-cell-names = "calibration";
+
+	qcom,ath11k-fw-memory-mode = <1>;
 };
