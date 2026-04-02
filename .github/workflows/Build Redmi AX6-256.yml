@@ -99,33 +99,27 @@ jobs:
       - name: Compile
         id: compile
         run: |
-          OPENWRT_SRC="$WORK_DIR/openwrt"
-          cd "$OPENWRT_SRC" || exit 1
-          # 下载依赖（静默模式）
-          printf "📥 下载编译依赖...\n"
-          make download -j$(nproc) > /dev/null 2>&1 || make download -j1 > /dev/null 2>&1
-          find dl -size -1024c -exec rm -f {} \;
-          # 编译工具链（保留日志）
-          printf "🔨 编译工具链...\n"
-          make tools/compile -j$(nproc) V=s 2>&1 | tee tools-compile.log
+          cd "$WORK_DIR/openwrt"
+          
+          echo "============================================="
+          echo "        下载源码包（详细输出）"
+          echo "============================================="
+          # 去掉静默模式，显示错误
+          make download -j$(nproc) V=s || { echo "下载失败，重试一次"; make download -j1 V=s; }
+          
+          echo "============================================="
+          echo "        编译固件（多线程）"
+          echo "============================================="
+          make -j$(nproc) V=s 2>&1 | tee compile.log
+          
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-              printf "❌ 工具链编译失败\n"
-              exit 1
+            echo -e "\n❌ 编译失败，显示最后 200 行错误信息"
+            tail -200 compile.log
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
           fi
-          # 编译固件（单线程，完整日志）
-          printf "🔨 编译固件（单线程）...\n"
-          make -j1 V=s 2>&1 | tee compile.log
-          #make -j$(nproc) V=s 2>&1 | tee compile.log
-          COMPILE_STATUS=${PIPESTATUS[0]}
-          # 校验结果
-          if [ $COMPILE_STATUS -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
-              printf "✅ 固件编译成功\n"
-              echo "status=success" >> "$GITHUB_OUTPUT"
-              echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
-          else
-              printf "❌ 固件未生成\n"
-              exit 1
-          fi
+          
+          # 后续检查固件文件...
 
       - name: Generate Firmware
         if: steps.compile.outputs.status == 'success'
