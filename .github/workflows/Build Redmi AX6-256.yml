@@ -114,8 +114,8 @@ jobs:
           fi
           # 编译固件（单线程，完整日志）
           printf "🔨 编译固件（单线程）...\n"
-          #make -j1 V=s 2>&1 | tee compile.log
-          make -j$(nproc) V=s 2>&1 | tee compile.log
+          make -j1 V=s 2>&1 | tee compile.log
+          #make -j$(nproc) V=s 2>&1 | tee compile.log
           COMPILE_STATUS=${PIPESTATUS[0]}
           # 校验结果
           if [ $COMPILE_STATUS -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
