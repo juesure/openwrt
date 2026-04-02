@@ -2,55 +2,59 @@
 OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
 cd "$OPENWRT_ROOT" || exit 1
 
-# 可选：删除整个补丁目录（避免旧补丁干扰）
-rm -rf target/linux/qualcommax/patches-6.12
+# 源路径和目标路径
+SRC_DTS_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom"
+DST_DTS_DIR="target/linux/qualcommax/dts"
 
-# 定义设备树源文件存放路径（OpenWrt files 目录）
-DTS_FILES_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom"
-mkdir -p "$DTS_FILES_DIR"
+# 创建目标目录
+mkdir -p "$DST_DTS_DIR"
 
-# 需要修复的文件列表（相对于 DTS_FILES_DIR）
-FILES_TO_FIX=(
-    "ipq8074-ac-cpu.dtsi"
-    "ipq8074-hk-cpu.dtsi"
-    "ipq8074-ess.dtsi"
-)
-
-# 定义要添加的 dummy 节点（提供缺失的标签）
-read -r -d '' DUMMY_NODES << 'EOF'
-/ {
-    cpu0: cpu@0 { compatible = "arm,cortex-a53"; };
-    cpu1: cpu@1 { compatible = "arm,cortex-a53"; };
-    cpu2: cpu@2 { compatible = "arm,cortex-a53"; };
-    cpu3: cpu@3 { compatible = "arm,cortex-a53"; };
-    clocks: clocks { };
-    wifi: wifi { };
-};
-EOF
-
-# 修复每个文件：如果文件不存在则创建，否则在头部插入 dummy 节点（如果尚未包含）
-for file in "${FILES_TO_FIX[@]}"; do
-    full_path="$DTS_FILES_DIR/$file"
-    if [ -f "$full_path" ]; then
-        # 检查是否已存在 cpu0 标签（避免重复添加）
-        if ! grep -q "cpu0:" "$full_path"; then
-            echo "正在修复 $full_path"
-            # 在文件开头插入 dummy 节点
-            { echo "$DUMMY_NODES"; cat "$full_path"; } > "$full_path.tmp" && mv "$full_path.tmp" "$full_path"
-        else
-            echo "跳过 $full_path（已包含 cpu0 定义）"
-        fi
+# 复制所有 ipq8074 相关的 dtsi 文件（包括依赖文件）
+echo "复制基础 DTSI 文件..."
+for f in ipq8074.dtsi ipq8074-512m.dtsi ipq8074-ac-cpu.dtsi ipq8074-ess.dtsi ipq8074-hk-cpu.dtsi ipq8074-cpr-regulator.dtsi; do
+    if [ -f "$SRC_DTS_DIR/$f" ]; then
+        cp "$SRC_DTS_DIR/$f" "$DST_DTS_DIR/$f"
+        echo "✅ 复制 $f"
     else
-        # 文件不存在，直接创建并写入 dummy 节点
-        echo "创建缺失的文件 $full_path"
-        echo "$DUMMY_NODES" > "$full_path"
-        # 可选：添加注释说明
-        echo "" >> "$full_path"
-        echo "// 该文件由脚本自动生成，用于提供缺失的标签定义" >> "$full_path"
+        echo "⚠️ 警告: $SRC_DTS_DIR/$f 不存在，跳过"
     fi
 done
 
-# 额外处理：某些 dts 文件（如 ipq8071-ap8220.dts）可能直接引用 &wifi，已在 dummy 节点中提供
-# 如果需要，也可以复制或修复主 dts 文件，但通常只需修复上述包含文件即可
+# 修改 ipq8071-ax3600.dtsi
+DTS_FILE="$DST_DTS_DIR/ipq8071-ax3600.dtsi"
+if [ -f "$DTS_FILE" ]; then
+    echo "修改 $DTS_FILE ..."
+    # 1. 修改 bootargs
+    sed -i 's|root=/dev/ubiblock0_0| ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait|' "$DTS_FILE"
+    # 2. 合并分区：将原来的 ubi_kernel 和 rootfs 两个分区替换为一个 rootfs UBI 分区（大小 0xf600000，即 246MB）
+    # 先删除原来的 rootfs 分区定义（从 rootfs: partition@2dc0000 开始到下一个分区之前）
+    sed -i '/rootfs: partition@2dc0000 {/,/};/d' "$DTS_FILE"
+    # 然后将 ubi_kernel 分区改为 rootfs，并调整大小和添加 compatible
+    sed -i '/partition@a00000 {/,/}/c\
+			partition@a00000 {\
+				label = "rootfs";\
+				reg = <0xa00000 0xf600000>;\
+				compatible = "openwrt,ubi";\
+			};' "$DTS_FILE"
+    # 删除 rsvd0 分区（因为 rootfs 已占满剩余空间，可选）
+    sed -i '/partition@fa00000 {/,/}/d' "$DTS_FILE"
+    # 3. 修改 WiFi 内存模式
+    sed -i 's/qcom,ath11k-fw-memory-mode = <1>;/qcom,ath11k-fw-memory-mode = <2>;/' "$DTS_FILE"
+    echo "✅ DTS 修改完成"
+else
+    echo "❌ 错误: 找不到 $DTS_FILE"
+    exit 1
+fi
 
-echo "✅ 设备树文件已修复，请重新执行编译命令（如 make）"
+# 确保 ipq8071-ax6.dts 中的 WiFi 节点正确（可选，通常无需修改）
+AX6_DTS="$DST_DTS_DIR/ipq8071-ax6.dts"
+if [ -f "$AX6_DTS" ]; then
+    # 移除可能存在的 rootfs 覆盖（原始文件中有 &rootfs 节点，我们已合并分区，故删除）
+    sed -i '/&rootfs {/,/}/d' "$AX6_DTS"
+    echo "✅ 清理 ipq8071-ax6.dts"
+fi
+
+# 删除所有内核补丁（避免补丁冲突）
+rm -rf target/linux/qualcommax/patches-6.12
+
+echo "✅ DIY 脚本执行完成"
