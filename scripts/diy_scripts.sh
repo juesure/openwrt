@@ -2,25 +2,17 @@
 OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
 cd "$OPENWRT_ROOT" || exit 1
 
-# 1. 删除原始路径下所有非 Redmi AX6 的 DTS 文件
-ORIG_DTS_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom"
-if [ -d "$ORIG_DTS_DIR" ]; then
-    # 保留 ipq8071-ax6.dts 和 ipq8071-ax3600.dtsi，删除其他所有 .dts 和 .dtsi
-    find "$ORIG_DTS_DIR" -type f -name "*.dts" ! -name "ipq8071-ax6.dts" -delete
-    find "$ORIG_DTS_DIR" -type f -name "*.dtsi" ! -name "ipq8071-ax3600.dtsi" -delete
-    echo "✅ 已删除原始路径下其他设备的 DTS 文件"
-fi
+# 1. 删除所有非 Redmi AX6 的 DTS 文件（整个源码树）
+find target/linux/qualcommax -type f \( -name "*.dts" -o -name "*.dtsi" \) \
+    ! -name "ipq8071-ax6.dts" \
+    ! -name "ipq8071-ax3600.dtsi" \
+    -delete
+echo "✅ 已删除所有其他设备的 DTS 文件"
 
-# 2. 同样清理生成目录（dts/）
+# 2. 确保生成目录存在，并写入自包含的 DTS
 GEN_DTS_DIR="target/linux/qualcommax/dts"
-if [ -d "$GEN_DTS_DIR" ]; then
-    find "$GEN_DTS_DIR" -type f -name "*.dts" ! -name "ipq8071-ax6.dts" -delete
-    find "$GEN_DTS_DIR" -type f -name "*.dtsi" ! -name "ipq8071-ax3600.dtsi" -delete
-    echo "✅ 已删除生成目录下其他设备的 DTS 文件"
-fi
-
-# 3. 写入自包含的 ipq8071-ax3600.dtsi（不依赖任何外部 .dtsi）
 mkdir -p "$GEN_DTS_DIR"
+
 cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
@@ -588,7 +580,6 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 };
 EOF
 
-# 4. 写入 ipq8071-ax6.dts
 cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
@@ -631,7 +622,19 @@ cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 };
 EOF
 
-# 5. 删除内核补丁目录（避免补丁冲突）
+# 3. 精简 ipq807x.mk，只保留 redmi_ax6 设备定义
+MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
+if [ -f "$MK_FILE" ]; then
+    cp "$MK_FILE" "$MK_FILE.bak"
+    # 提取 xiaomi_ax3600 和 redmi_ax6 定义
+    awk '/^define Device\/xiaomi_ax3600/,/^endef/ {print} /^define Device\/redmi_ax6/,/^endef/ {print}' "$MK_FILE.bak" > "$MK_FILE"
+    # 添加必要的 TARGET_DEVICES
+    echo "TARGET_DEVICES += xiaomi_ax3600" >> "$MK_FILE"
+    echo "TARGET_DEVICES += redmi_ax6" >> "$MK_FILE"
+    echo "✅ ipq807x.mk 已精简"
+fi
+
+# 4. 删除内核补丁目录
 rm -rf target/linux/qualcommax/patches-6.12
 
 echo "✅ DIY 脚本执行完成"
