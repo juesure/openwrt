@@ -98,7 +98,7 @@ jobs:
       - name: Compile
         id: compile
         run: |
-          cd "$WORK_DIR/openwrt" || exit 1
+          cd "$WORK_DIR/openwrt"
           
           echo "📥 下载编译依赖..."
           make download -j$(nproc) 2>&1 | tee download.log
