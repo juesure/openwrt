@@ -95,38 +95,49 @@ jobs:
           make defconfig -e > /dev/null 2>&1
           printf "✅ Preprocess 步骤完成\n"
 
-      # ========== 核心修复：Compile 步骤（无任何语法错误） ==========
       - name: Compile
         id: compile
         run: |
-          OPENWRT_SRC="$WORK_DIR/openwrt"
-          cd "$OPENWRT_SRC" || exit 1
-          # 下载依赖（静默模式）
-          printf "📥 下载编译依赖...\n"
-          make download -j$(nproc) > /dev/null 2>&1 || make download -j1 > /dev/null 2>&1
-          find dl -size -1024c -exec rm -f {} \;
-          # 编译工具链
-          printf "🔨 编译工具链...\n"
-          make tools/compile -j$(nproc) V=s > /dev/null 2>&1 || { printf "❌ 工具链编译失败\n"; exit 1; }
-          # 编译固件
-          printf "🔨 编译固件（多线程）...\n"
-          #make -j1 V=s 2>&1 | tee compile.log
-          make -j$(nproc) > /dev/null 2>&1 | tee compile.log
-          COMPILE_STATUS=$?
-          # 单线程重试
-          if [ $COMPILE_STATUS -ne 0 ]; then
-              printf "⚠️ 多线程编译失败，单线程重试...\n"
-              make -j1 V=s > /dev/null 2>&1
-              COMPILE_STATUS=$?
+          cd "$WORK_DIR/openwrt" || exit 1
+          
+          echo "📥 下载编译依赖..."
+          make download -j$(nproc) 2>&1 | tee download.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ 下载依赖失败"
+            tail -50 download.log
+            exit 1
           fi
+          
+          echo "🔨 编译工具链..."
+          make tools/compile -j$(nproc) V=s 2>&1 | tee toolchain.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ 工具链编译失败"
+            tail -100 toolchain.log
+            exit 1
+          fi
+          
+          echo "🔨 编译固件（多线程）..."
+          make -j$(nproc) 2>&1 | tee compile.log
+          COMPILE_STATUS=${PIPESTATUS[0]}
+          
+          if [ $COMPILE_STATUS -ne 0 ]; then
+            echo "⚠️ 多线程编译失败，单线程重试..."
+            make -j1 V=s 2>&1 | tee compile_single.log
+            COMPILE_STATUS=${PIPESTATUS[0]}
+          fi
+          
           # 校验结果
-          if [ $COMPILE_STATUS -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
-              printf "✅ 固件编译成功\n"
-              echo "status=success" >> "$GITHUB_OUTPUT"
-              echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
+          FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
+          if [ $COMPILE_STATUS -eq 0 ] && [ -d "$FIRMWARE_DIR" ] && find "$FIRMWARE_DIR" -maxdepth 1 -name "*redmi_ax6*" | grep -q .; then
+            echo "✅ 固件编译成功"
+            echo "status=success" >> "$GITHUB_OUTPUT"
+            echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
+            ls -lh "$FIRMWARE_DIR"/*redmi_ax6*
           else
-              printf "❌ 固件未生成\n"
-              exit 1
+            echo "❌ 固件未生成"
+            echo "编译日志最后200行："
+            tail -200 compile.log
+            exit 1
           fi
 
       - name: Generate Firmware
