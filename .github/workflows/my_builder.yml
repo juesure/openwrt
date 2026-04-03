@@ -85,6 +85,12 @@ jobs:
               printf "⚠️ 未找到json_add_image_info.py，跳过修复\n"
           fi
           
+          # ========== 新增：修复设备树文件路径 ==========
+          printf "🔧 修复设备树文件路径...\n"
+          sed -i 's|\.\./dts/|$(TOPDIR)/target/linux/qualcommax/dts/|g' target/linux/qualcommax/image/Makefile
+          printf "✅ 设备树路径已修复\n"
+          # ============================================
+          
           # 禁用fwupd
           printf "%s\n" "CONFIG_PACKAGE_fwupd=n" "CONFIG_PACKAGE_fwupd-libs=n" "CONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "$OPENWRT_SRC/.config"
           
