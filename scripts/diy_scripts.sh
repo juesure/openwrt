@@ -9,10 +9,11 @@ find target/linux/qualcommax -type f \( -name "*.dts" -o -name "*.dtsi" \) \
     -delete
 echo "✅ 已删除所有其他设备的 DTS 文件"
 
-# 2. 确保生成目录存在，并写入自包含的 DTS
+# 2. 确保生成目录存在，并写入完整的 DTS/DTSI 文件
 GEN_DTS_DIR="target/linux/qualcommax/dts"
 mkdir -p "$GEN_DTS_DIR"
 
+# 写入完整的 ipq8071-ax3600.dtsi（包含CPU、时钟、WiFi等核心定义）
 cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
@@ -580,6 +581,7 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 };
 EOF
 
+# 写入完整的 ipq8071-ax6.dts（匹配 Canvas 中的内容）
 cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
@@ -622,19 +624,18 @@ cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 };
 EOF
 
-# 3. 精简 ipq807x.mk，只保留 redmi_ax6 设备定义
+# 3. 精简 ipq807x.mk，**仅保留 redmi_ax6** 设备定义（关键：删除 xiaomi_ax3600）
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
 if [ -f "$MK_FILE" ]; then
     cp "$MK_FILE" "$MK_FILE.bak"
-    # 提取 xiaomi_ax3600 和 redmi_ax6 定义
-    awk '/^define Device\/xiaomi_ax3600/,/^endef/ {print} /^define Device\/redmi_ax6/,/^endef/ {print}' "$MK_FILE.bak" > "$MK_FILE"
-    # 添加必要的 TARGET_DEVICES
-    echo "TARGET_DEVICES += xiaomi_ax3600" >> "$MK_FILE"
+    # 仅提取 redmi_ax6 定义，完全移除 xiaomi_ax3600
+    awk '/^define Device\/redmi_ax6/,/^endef/ {print}' "$MK_FILE.bak" > "$MK_FILE"
+    # 仅添加 redmi_ax6 到目标设备
     echo "TARGET_DEVICES += redmi_ax6" >> "$MK_FILE"
-    echo "✅ ipq807x.mk 已精简"
+    echo "✅ ipq807x.mk 已精简（仅保留 redmi_ax6）"
 fi
 
-# 4. 删除内核补丁目录
+# 4. 删除内核补丁目录（避免补丁冲突）
 rm -rf target/linux/qualcommax/patches-6.12
 
 echo "✅ DIY 脚本执行完成"
