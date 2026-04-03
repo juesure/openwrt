@@ -6,7 +6,7 @@ env:
   REPO_URL: https://github.com/juesure/openwrt/
   REPO_BRANCH: AX6_256M_FLASH_V1.1
   DIY_SCRIPT: /home/runner/work/openwrt/openwrt/scripts/diy_scripts.sh
-  CONFIG_FILE: /home/runner/work/openwrt/openwrt/config/my_config.config
+  CONFIG_FILE: /home/runner/work/openwrt/openwrt/config/my_config.sh
   TZ: Asia/Shanghai
   WORK_DIR: /home/runner/work/openwrt/openwrt/workdir
   FIRMWARE_OUTPUT_DIR: /home/runner/work/openwrt/openwrt/workdir/openwrt/bin/targets/qualcommax/ipq807x
