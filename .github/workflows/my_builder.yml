@@ -89,17 +89,18 @@ jobs:
         run: |
           cd "$WORK_DIR/openwrt"
           
-          # ========== 关键修复：复制设备树文件到编译期望的路径 ==========
+          # ========== 修复设备树文件路径 ==========
           echo "🔧 修复设备树文件路径问题..."
           DTS_SRC="$WORK_DIR/openwrt/target/linux/qualcommax/dts"
-          DTS_DST="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-qualcommax_ipq807x/dts"
+          # 正确的目标目录：build_dir/target-.../dts （注意不要多一层 linux-qualcommax_ipq807x）
+          DTS_DST="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/dts"
           mkdir -p "$DTS_DST"
-          # 复制所有 .dts 和 .dtsi 文件（包括 ipq8071-ax3600.dts 及其包含文件）
+          # 复制所有 .dts 和 .dtsi 文件
           cp -f "$DTS_SRC"/*.dts "$DTS_DST/" 2>/dev/null || true
           cp -f "$DTS_SRC"/*.dtsi "$DTS_DST/" 2>/dev/null || true
           echo "✅ 设备树文件已复制到 $DTS_DST"
           ls -lh "$DTS_DST/" || true
-          # ============================================================
+          # ========================================
           
           echo "📥 下载编译依赖..."
           make download -j$(nproc) 2>&1 | tee download.log
