@@ -1,0 +1,171 @@
+name: Redmi AX6 (256M) Build 
+
+# 全局环境变量（兼容 Node.js 24 + 路径配置）
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  REPO_URL: https://github.com/juesure/openwrt/
+  REPO_BRANCH: AX6_256M_FLASH_V1.1
+  DIY_SCRIPT: /home/runner/work/openwrt/openwrt/scripts/diy_scripts.sh
+  CONFIG_FILE: /home/runner/work/openwrt/openwrt/config/my_config.config
+  TZ: Asia/Shanghai
+  WORK_DIR: /home/runner/work/openwrt/openwrt/workdir
+  FIRMWARE_OUTPUT_DIR: /home/runner/work/openwrt/openwrt/workdir/openwrt/bin/targets/qualcommax/ipq807x
+
+on:
+  push:
+    branches: [AX6_256M_FLASH_V1.1]
+  workflow_dispatch:
+
+jobs:
+  build-ax6-firmware:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4.2.0
+        with:
+          path: /home/runner/work/openwrt/openwrt
+          fetch-depth: 1
+
+      - name: Initialize Env
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          # 清理冗余文件
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          # 安装依赖（单行书写，无换行错误）
+          sudo apt update -y && sudo apt full-upgrade -y && sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod zip gh
+          # 设置时区
+          sudo timedatectl set-timezone "$TZ"
+          # 创建目录 + 校验文件
+          mkdir -p "$WORK_DIR" && chmod 777 "$WORK_DIR"
+          [ ! -f "$DIY_SCRIPT" ] && { printf "❌ DIY脚本不存在\n"; exit 1; } && chmod +x "$DIY_SCRIPT"
+          [ ! -f "$CONFIG_FILE" ] && { printf "❌ 配置文件不存在\n"; exit 1; }
+          mkdir -p "$FIRMWARE_OUTPUT_DIR" && chmod 777 "$FIRMWARE_OUTPUT_DIR"
+
+      - name: Clone Source
+        run: |
+          cd "$WORK_DIR" || { printf "❌ 进入工作目录失败\n"; exit 1; }
+          # 克隆源码（单行命令，无换行）
+          for i in {1..3}; do git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt && break; rm -rf openwrt; sleep 5; done
+          [ ! -d "$WORK_DIR/openwrt" ] && { printf "❌ 源码克隆失败\n"; exit 1; }
+          ln -sf "$WORK_DIR/openwrt" /home/runner/work/openwrt/openwrt/openwrt
+          chmod -R 755 "$WORK_DIR/openwrt"
+          printf "✅ 源码克隆完成\n"
+
+      - name: Preprocess
+        run: |
+          OPENWRT_SRC="$WORK_DIR/openwrt"
+          cd "$OPENWRT_SRC" || exit 1
+          printf "🔧 当前工作目录：%s\n" "$(pwd)"
+          
+          # 强制赋予DIY脚本可执行权限（核心修复）
+          chmod +x "$DIY_SCRIPT"
+          if [ ! -x "$DIY_SCRIPT" ]; then
+              printf "❌ 赋予DIY脚本权限失败：%s\n" "$DIY_SCRIPT"
+              exit 1
+          fi
+          
+          # 执行DIY脚本
+          "$DIY_SCRIPT" || {
+              printf "❌ DIY脚本执行失败（日志：）\n"
+              # 输出脚本内容，便于调试（可选）
+              cat "$DIY_SCRIPT" 2>/dev/null
+              exit 1
+          }
+          
+          # 修复json文件
+          JSON_FILE=$(find "$OPENWRT_SRC" -name "json_add_image_info.py" 2>/dev/null | head -1)
+          if [ -n "$JSON_FILE" ]; then
+              sed -i 's/return int(image_size)/return int(image_size, 0)/' "$JSON_FILE"
+              printf "✅ 已修复：%s\n" "$JSON_FILE"
+          else
+              printf "⚠️ 未找到json_add_image_info.py，跳过修复\n"
+          fi
+          
+          # 禁用fwupd
+          printf "%s\n" "CONFIG_PACKAGE_fwupd=n" "CONFIG_PACKAGE_fwupd-libs=n" "CONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "$OPENWRT_SRC/.config"
+          
+          # 覆盖配置文件
+          cp "$CONFIG_FILE" "$OPENWRT_SRC/.config"
+          
+          # 生成defconfig
+          make defconfig -e > /dev/null 2>&1
+          printf "✅ Preprocess 步骤完成\n"
+
+      # ========== 核心修复：Compile 步骤（无任何语法错误） ==========
+      - name: Compile
+        id: compile
+        run: |
+          OPENWRT_SRC="$WORK_DIR/openwrt"
+          cd "$OPENWRT_SRC" || exit 1
+          # 下载依赖（静默模式）
+          printf "📥 下载编译依赖...\n"
+          make download -j$(nproc) > /dev/null 2>&1 || make download -j1 > /dev/null 2>&1
+          find dl -size -1024c -exec rm -f {} \;
+          # 编译工具链
+          printf "🔨 编译工具链...\n"
+          make tools/compile -j$(nproc) V=s > /dev/null 2>&1 || { printf "❌ 工具链编译失败\n"; exit 1; }
+          # 编译固件
+          printf "🔨 编译固件（多线程）...\n"
+          make -j$(nproc) > /dev/null 2>&1
+          COMPILE_STATUS=$?
+          # 单线程重试
+          if [ $COMPILE_STATUS -ne 0 ]; then
+              printf "⚠️ 多线程编译失败，单线程重试...\n"
+              make -j1 V=s > /dev/null 2>&1
+              COMPILE_STATUS=$?
+          fi
+          # 校验结果
+          if [ $COMPILE_STATUS -eq 0 ] && [ -d "$FIRMWARE_OUTPUT_DIR" ] && ls "$FIRMWARE_OUTPUT_DIR"/*redmi_ax6* 2>/dev/null; then
+              printf "✅ 固件编译成功\n"
+              echo "status=success" >> "$GITHUB_OUTPUT"
+              echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
+          else
+              printf "❌ 固件未生成\n"
+              exit 1
+          fi
+
+      - name: Generate Firmware
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          cd "$FIRMWARE_OUTPUT_DIR" || exit 1
+          BUILD_TIME="${{ env.BUILD_TIME }}"
+          
+          # 列出所有生成的文件（调试用）
+          echo "📂 编译输出目录内容："
+          ls -lh
+          
+          # 准备发布目录
+          mkdir -p /home/runner/firmware
+          
+          # 复制 sysupgrade.bin 文件
+          cp *redmi_ax6*.bin /home/runner/firmware/ 2>/dev/null || true
+          
+          # 复制 UBI 文件（如果存在）
+          cp *ubi /home/runner/firmware/ 2>/dev/null || true
+          
+          # 如果仍没有 rootfs.ubi，尝试从 sysupgrade.bin 提取
+          if ! ls /home/runner/firmware/*rootfs.ubi 1>/dev/null 2>&1; then
+              SYSUPGRADE=$(ls *sysupgrade.bin | head -1)
+              if [ -n "$SYSUPGRADE" ]; then
+                  dd if="$SYSUPGRADE" of=/home/runner/firmware/redmi_ax6_rootfs.ubi bs=1M skip=4
+                  echo "✅ 已从 sysupgrade.bin 提取 rootfs.ubi"
+              fi
+          fi
+          
+          # 发布 Release（独立附件）
+          gh release create "AX6-256M-${BUILD_TIME}" --title "Redmi AX6 256M ${BUILD_TIME}" --notes "Redmi AX6 256M Firmware" /home/runner/firmware/* 2>/dev/null || printf "⚠️ Release已存在\n"
+          printf "✅ 固件发布完成\n"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        if: steps.compile.outputs.status == 'success'
+        with:
+          name: "AX6-256M-Firmware-${{ env.BUILD_TIME }}"
+          path: /home/runner/firmware/*
+          retention-days: 30
