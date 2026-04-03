@@ -110,8 +110,8 @@ jobs:
           make tools/compile -j$(nproc) V=s > /dev/null 2>&1 || { printf "❌ 工具链编译失败\n"; exit 1; }
           # 编译固件
           printf "🔨 编译固件（多线程）...\n"
-          make -j1 V=s 2>&1 | tee compile.log
-          #make -j$(nproc) > /dev/null 2>&1
+          #make -j1 V=s 2>&1 | tee compile.log
+          make -j$(nproc) > /dev/null 2>&1 | tee compile.log
           COMPILE_STATUS=$?
           # 单线程重试
           if [ $COMPILE_STATUS -ne 0 ]; then
