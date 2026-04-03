@@ -2,16 +2,30 @@
 OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
 cd "$OPENWRT_ROOT" || exit 1
 
-# 删除所有其他设备的 DTS 文件，只保留 Redmi AX6 相关
-DTS_DIR="target/linux/qualcommax/dts"
-if [ -d "$DTS_DIR" ]; then
-    find "$DTS_DIR" -type f -name "*.dts" ! -name "ipq8071-ax6.dts" -delete
-    find "$DTS_DIR" -type f -name "*.dtsi" ! -name "ipq8071-ax3600.dtsi" -delete
-    echo "✅ 已删除其他设备的 DTS 文件"
+# 删除所有其他设备的 DTS 源文件（原始路径和生成路径）
+SRC_DTS_DIR="target/linux/qualcommax/files/arch/arm64/boot/dts/qcom"
+GEN_DTS_DIR="target/linux/qualcommax/dts"
+
+# 清理原始源文件目录
+if [ -d "$SRC_DTS_DIR" ]; then
+    # 删除所有 .dts 文件（其他设备的设备树）
+    find "$SRC_DTS_DIR" -type f -name "*.dts" -delete
+    # 删除所有 .dtsi 文件（基础头文件，因为我们将使用自包含版本）
+    find "$SRC_DTS_DIR" -type f -name "*.dtsi" -delete
+    echo "✅ 已删除原始 DTS 源文件"
 fi
 
-# 写入自包含的 ipq8071-ax3600.dtsi（不依赖任何外部 .dtsi）
-cat > "$DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
+# 清理生成目录
+if [ -d "$GEN_DTS_DIR" ]; then
+    find "$GEN_DTS_DIR" -type f \( -name "*.dts" -o -name "*.dtsi" \) ! -name "ipq8071-ax6.dts" ! -name "ipq8071-ax3600.dtsi" -delete
+    echo "✅ 已清理生成目录"
+fi
+
+# 确保生成目录存在
+mkdir -p "$GEN_DTS_DIR"
+
+# 写入自包含的 ipq8071-ax3600.dtsi（不依赖任何外部 .dtsi，包含所有必要定义）
+cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
 
@@ -579,7 +593,7 @@ cat > "$DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 EOF
 
 # 写入 ipq8071-ax6.dts
-cat > "$DTS_DIR/ipq8071-ax6.dts" << 'EOF'
+cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
 
