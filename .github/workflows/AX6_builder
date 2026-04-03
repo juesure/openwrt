@@ -1,5 +1,4 @@
 name: Redmi AX6 (256M) Build 
-
 # 全局环境变量（兼容 Node.js 24 + 路径配置）
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -10,7 +9,6 @@ env:
   TZ: Asia/Shanghai
   WORK_DIR: /home/runner/work/openwrt/openwrt/workdir
   FIRMWARE_OUTPUT_DIR: /home/runner/work/openwrt/openwrt/workdir/openwrt/bin/targets/qualcommax/ipq807x
-
 on:
   push:
     branches: [AX6_256M_FLASH_V1.1]
