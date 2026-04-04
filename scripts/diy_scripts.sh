@@ -9,11 +9,10 @@ find target/linux/qualcommax -type f \( -name "*.dts" -o -name "*.dtsi" \) \
     -delete
 echo "✅ 已删除所有其他设备的 DTS 文件"
 
-# 2. 确保生成目录存在，并写入完整的 DTS/DTSI 文件
+# 2. 确保生成目录存在，并写入自包含的 DTS（分区表保持硬件实际值）
 GEN_DTS_DIR="target/linux/qualcommax/dts"
 mkdir -p "$GEN_DTS_DIR"
 
-# 写入完整的 ipq8071-ax3600.dtsi（包含CPU、时钟、WiFi等核心定义）
 cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
@@ -581,7 +580,6 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 };
 EOF
 
-# 写入完整的 ipq8071-ax6.dts（匹配 Canvas 中的内容）
 cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 /* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
@@ -624,18 +622,37 @@ cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 };
 EOF
 
-# 3. 精简 ipq807x.mk，**仅保留 redmi_ax6** 设备定义（关键：删除 xiaomi_ax3600）
+# 3. 重新编写 ipq807x.mk（核心：IMAGE_SIZE 对应 256MB Flash 总容量）
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
-if [ -f "$MK_FILE" ]; then
-    cp "$MK_FILE" "$MK_FILE.bak"
-    # 仅提取 redmi_ax6 定义，完全移除 xiaomi_ax3600
-    awk '/^define Device\/redmi_ax6/,/^endef/ {print}' "$MK_FILE.bak" > "$MK_FILE"
-    # 仅添加 redmi_ax6 到目标设备
-    echo "TARGET_DEVICES += redmi_ax6" >> "$MK_FILE"
-    echo "✅ ipq807x.mk 已精简（仅保留 redmi_ax6）"
-fi
+# 备份原文件
+[ -f "$MK_FILE" ] && cp "$MK_FILE" "$MK_FILE.bak"
+# 完全重新写入，仅保留 redmi_ax6 定义 + 正确的 256MB Flash 容量配置
+cat > "$MK_FILE" << 'EOF'
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Copyright (C) 2021 OpenWrt.org
 
-# 4. 删除内核补丁目录（避免补丁冲突）
+define Device/redmi_ax6
+  DEVICE_VENDOR := Redmi
+  DEVICE_MODEL := AX6
+  DEVICE_DTS := ipq8071-ax6
+  DEVICE_DTS_DIR := ../dts
+  # 核心修正：256MB Flash 总容量 = 256*1024=262144KB，扣除4MB冗余（避免编译溢出）
+  IMAGE_SIZE := 258048k  
+  # NAND Flash 硬件参数适配（必须配置，否则固件写入失败）
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  SUBPAGESIZE := 2048
+  VID_HDR_OFFSET := 2048
+  # 固件生成规则
+  IMAGES := sysupgrade.bin
+  IMAGE/sysupgrade.bin := append-kernel | append-rootfs | pad-rootfs | append-metadata | check-size $$$$(IMAGE_SIZE)
+endef
+TARGET_DEVICES += redmi_ax6
+EOF
+echo "✅ ipq807x.mk 已重新编写（IMAGE_SIZE 匹配 256MB Flash 总容量）"
+
+# 4. 删除内核补丁目录（避免冲突）
 rm -rf target/linux/qualcommax/patches-6.12
 
 echo "✅ DIY 脚本执行完成"
