@@ -1,8 +1,13 @@
 #!/bin/bash
-set -euo pipefail  # 开启严格模式，捕获所有错误
+set -euo pipefail
 OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
+LOG_FILE="$OPENWRT_ROOT/compile.log"
 
-# 1. 检查并进入 OpenWRT 根目录
+# 1. 初始化日志
+echo "========== 编译开始：$(date) ==========" > "$LOG_FILE"
+exec > >(tee -a "$LOG_FILE") 2>&1  # 所有输出写入日志
+
+# 2. 检查并进入 OpenWRT 根目录
 if [ ! -d "$OPENWRT_ROOT" ]; then
     echo "❌ 错误：OpenWRT 根目录不存在 - $OPENWRT_ROOT"
     exit 1
@@ -10,17 +15,19 @@ fi
 cd "$OPENWRT_ROOT" || { echo "❌ 无法进入目录 $OPENWRT_ROOT"; exit 1; }
 echo "✅ 已进入 OpenWRT 根目录：$OPENWRT_ROOT"
 
-# 2. 彻底清理旧文件（避免缓存/权限冲突）
-sudo rm -rf target/linux/qualcommax/*  # 使用 sudo 确保权限
-echo "✅ 已彻底清理 qualcommax 目录"
+# 3. 彻底清理旧编译产物（关键！）
+sudo rm -rf bin/targets/qualcommax/*
+sudo rm -rf build_dir/target-aarch64_cortex-a53_musl/*
+sudo rm -rf staging_dir/target-aarch64_cortex-a53_musl/*
+echo "✅ 已清理旧编译产物"
 
-# 3. 重建完整目录结构（关键！修复路径不存在问题）
+# 4. 重建 Redmi AX6 设备树（修复后的无错版本）
+sudo rm -rf target/linux/qualcommax/*
 mkdir -p target/linux/qualcommax/dts
 mkdir -p target/linux/qualcommax/image
-sudo chmod -R 777 target/linux/qualcommax  # 赋予全权限
-echo "✅ 已重建目录结构并赋予权限"
+sudo chmod -R 777 target/linux/qualcommax
 
-# ========== 核心：ipq8074.dtsi（无语法错误） ==========
+# ========== ipq8074.dtsi ==========
 cat > target/linux/qualcommax/dts/ipq8074.dtsi << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 #include <dt-bindings/interrupt-controller/arm-gic.h>
@@ -621,7 +628,7 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'EOF'
 };
 EOF
 
-# ========== Redmi AX6 专属 DTS ==========
+# ========== ipq8071-ax6.dts ==========
 cat > target/linux/qualcommax/dts/ipq8071-ax6.dts << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 /dts-v1/;
@@ -639,7 +646,7 @@ cat > target/linux/qualcommax/dts/ipq8071-ax6.dts << 'EOF'
 };
 EOF
 
-# ========== ipq807x.mk（修复路径/权限） ==========
+# ========== ipq807x.mk ==========
 cat > target/linux/qualcommax/image/ipq807x.mk << 'EOF'
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2021 OpenWrt.org
@@ -660,11 +667,39 @@ endef
 TARGET_DEVICES += redmi_ax6
 EOF
 
-# 4. 验证文件是否写入成功
-if [ -f "target/linux/qualcommax/image/ipq807x.mk" ] && [ -f "target/linux/qualcommax/dts/ipq8071-ax6.dts" ]; then
-    echo "✅ 所有文件写入成功！"
-    echo "✅ 脚本执行完成，可开始编译"
+# 5. 配置编译目标（关键！指定 Redmi AX6）
+echo "✅ 配置编译目标：Redmi AX6 (qualcommax/ipq807x)"
+make defconfig
+echo "CONFIG_TARGET_qualcommax=y" >> .config
+echo "CONFIG_TARGET_qualcommax_ipq807x=y" >> .config
+echo "CONFIG_TARGET_DEVICE_qualcommax_ipq807x_DEVICE_redmi_ax6=y" >> .config
+make defconfig  # 应用配置
+
+# 6. 开始编译（指定正确目标，记录日志）
+echo "✅ 开始编译 Redmi AX6 固件..."
+make -j$(nproc) target/linux/compile TARGET=qualcommax SUBTARGET=ipq807x DEVICE=redmi_ax6
+make -j$(nproc) package/install
+make -j$(nproc) target/install
+make -j$(nproc) package/index
+make -j$(nproc) json_overview_image_info
+make -j$(nproc) checksum
+
+# 7. 校验固件是否生成
+FIRMWARE_DIR="$OPENWRT_ROOT/bin/targets/qualcommax/ipq807x"
+if [ -d "$FIRMWARE_DIR" ]; then
+    FIRMWARE_FILE=$(ls "$FIRMWARE_DIR" | grep -E "openwrt-qualcommax-ipq807x-redmi_ax6-sysupgrade\.bin")
+    if [ -n "$FIRMWARE_FILE" ]; then
+        echo "✅ 固件生成成功！"
+        echo "📌 固件路径：$FIRMWARE_DIR/$FIRMWARE_FILE"
+        ls -lh "$FIRMWARE_DIR/$FIRMWARE_FILE"
+        exit 0
+    else
+        echo "❌ 固件文件未找到，编译日志："
+        tail -100 "$LOG_FILE"
+        exit 1
+    fi
 else
-    echo "❌ 文件写入失败，请检查权限"
+    echo "❌ 固件目录不存在，编译日志："
+    tail -100 "$LOG_FILE"
     exit 1
 fi
