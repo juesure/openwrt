@@ -9,22 +9,39 @@ find target/linux/qualcommax -type f \( -name "*.dts" -o -name "*.dtsi" \) \
     -delete
 echo "✅ 已删除所有其他设备的 DTS 文件"
 
-# 2. 确保生成目录存在，并写入自包含的 DTS（分区表保持硬件实际值）
+# 2. 确保生成目录存在，并写入**语法正确**的官方标准 DTS
 GEN_DTS_DIR="target/linux/qualcommax/dts"
 mkdir -p "$GEN_DTS_DIR"
 
+# 核心修复：替换有语法错误的 ax3600.dtsi，采用 OpenWRT 官方标准语法
 cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
-// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-/* Copyright (c) 2021, Robert Marko <robimarko@gmail.com> */
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * Copyright (c) 2021, Robert Marko <robimarko@gmail.com>
+ */
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
 
 / {
-	#address-cells = <2>;
-	#size-cells = <2>;
+	model = "Xiaomi AX3600";
+	compatible = "xiaomi,ax3600", "qcom,ipq8074";
 
-	memory@40000000 {
+	aliases {
+		serial0 = &blsp1_uart5;
+		led-boot = &led_system_yellow;
+		led-failsafe = &led_system_yellow;
+		led-running = &led_system_blue;
+		led-upgrade = &led_system_yellow;
+		label-mac-device = &dp2;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory {
 		device_type = "memory";
 		reg = <0x0 0x40000000 0x0 0x20000000>;
 	};
@@ -80,246 +97,6 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 		};
 	};
 
-	cpus {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		cpu@0 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x0>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-
-		cpu@1 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x1>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-
-		cpu@2 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x2>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-
-		cpu@3 {
-			device_type = "cpu";
-			compatible = "arm,cortex-a53";
-			reg = <0x3>;
-			enable-method = "psci";
-			next-level-cache = <&L2_0>;
-		};
-
-		L2_0: l2-cache {
-			compatible = "cache";
-			cache-level = <2>;
-		};
-	};
-
-	psci {
-		compatible = "arm,psci-1.0";
-		method = "smc";
-	};
-
-	clocks {
-		xo: xo {
-			compatible = "fixed-clock";
-			clock-frequency = <19200000>;
-			#clock-cells = <0>;
-		};
-
-		sleep_clk: sleep_clk {
-			compatible = "fixed-clock";
-			clock-frequency = <32000>;
-			#clock-cells = <0>;
-		};
-	};
-
-	timer {
-		compatible = "arm,armv8-timer";
-		interrupts = <1 2 0xf08>,
-			     <1 3 0xf08>,
-			     <1 4 0xf08>,
-			     <1 1 0xf08>;
-	};
-
-	soc: soc@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges = <0 0 0 0xffffffff>;
-		compatible = "simple-bus";
-
-		intc: interrupt-controller@b000000 {
-			compatible = "qcom,msm-qgic2";
-			interrupt-controller;
-			#interrupt-cells = <3>;
-			reg = <0x0b000000 0x1000>,
-			      <0x0b002000 0x1000>;
-		};
-
-		timer@b120000 {
-			compatible = "arm,armv7-timer-mem";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			ranges;
-			reg = <0x0b120000 0x1000>;
-			clock-frequency = <19200000>;
-
-			frame@b120000 {
-				frame-number = <0>;
-				interrupts = <0 8 4>,
-					     <0 7 4>;
-				reg = <0x0b121000 0x1000>,
-				      <0x0b122000 0x1000>;
-			};
-		};
-
-		apcs_glb: mailbox@b111000 {
-			compatible = "qcom,ipq6018-apcs-apps-global";
-			reg = <0x0b111000 0x1000>;
-			#clock-cells = <1>;
-			clocks = <&xo>;
-			clock-names = "xo";
-		};
-
-		blsp1_uart5: serial@78b3000 {
-			compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
-			reg = <0x078b3000 0x200>;
-			interrupts = <0 308 4>;
-			clocks = <&gcc GCC_BLSP1_UART3_APPS_CLK>,
-				 <&gcc GCC_BLSP1_AHB_CLK>;
-			clock-names = "core", "iface";
-			status = "disabled";
-		};
-
-		prng: rng@22000 {
-			compatible = "qcom,prng";
-			reg = <0x00022000 0x200>;
-			clocks = <&gcc GCC_PRNG_AHB_CLK>;
-			clock-names = "core";
-			status = "disabled";
-		};
-
-		cryptobam: dma-controller@704000 {
-			compatible = "qcom,bam-v1.7.0";
-			reg = <0x00704000 0x20000>;
-			interrupts = <0 207 4>;
-			#dma-cells = <1>;
-			qcom,ee = <1>;
-			qcom,controlled-remotely;
-			status = "disabled";
-		};
-
-		crypto: crypto@73a000 {
-			compatible = "qcom,crypto-v5.1";
-			reg = <0x0073a000 0x6000>;
-			clocks = <&gcc GCC_CRYPTO_AHB_CLK>,
-				 <&gcc GCC_CRYPTO_AXI_CLK>,
-				 <&gcc GCC_CRYPTO_CLK>;
-			clock-names = "iface", "bus", "core";
-			dmas = <&cryptobam 2>, <&cryptobam 3>;
-			dma-names = "rx", "tx";
-			status = "disabled";
-		};
-
-		qpic_bam: dma-controller@7984000 {
-			compatible = "qcom,bam-v1.7.0";
-			reg = <0x07984000 0x1a000>;
-			interrupts = <0 286 4>;
-			#dma-cells = <1>;
-			qcom,ee = <1>;
-			qcom,controlled-remotely;
-			status = "disabled";
-		};
-
-		qpic_nand: nand-controller@79b0000 {
-			compatible = "qcom,ipq8074-nand";
-			reg = <0x079b0000 0x10000>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			clocks = <&gcc GCC_QPIC_CLK>,
-				 <&gcc GCC_QPIC_AHB_CLK>;
-			clock-names = "core", "aon";
-			dmas = <&qpic_bam 0>,
-			       <&qpic_bam 1>,
-			       <&qpic_bam 2>;
-			dma-names = "tx", "rx", "cmd";
-			status = "disabled";
-		};
-
-		mdio: mdio@90000 {
-			compatible = "qcom,ipq8074-mdio";
-			reg = <0x00090000 0x64>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-		};
-
-		edma: edma@3a001000 {
-			compatible = "qcom,ipq8074-edma";
-			reg = <0x3a001000 0x8000>;
-			reg-names = "edma";
-			interrupts = <0 189 4>,
-				     <0 190 4>,
-				     <0 191 4>,
-				     <0 192 4>;
-			interrupt-names = "rx0", "rx1", "tx0", "tx1";
-			clocks = <&gcc GCC_EDMA_CLK>,
-				 <&gcc GCC_EDMA_AXI_CLK>;
-			clock-names = "core", "axi";
-			resets = <&gcc GCC_EDMA_RESET>;
-			reset-names = "edma";
-			status = "disabled";
-		};
-
-		ess-switch@3a000000 {
-			compatible = "qcom,ipq8074-ess-switch";
-			reg = <0x3a000000 0x1000000>;
-			reg-names = "core";
-			interrupts-extended = <&intc 0 188 4>;
-			interrupt-names = "macirq";
-			clocks = <&gcc GCC_CMN_12GPLL_AHB_CLK>,
-				 <&gcc GCC_CMN_12GPLL_SYS_CLK>;
-			clock-names = "ahb", "sys";
-			resets = <&gcc GCC_ESS_RESET>;
-			reset-names = "ess";
-			qcom,mdio = <&mdio>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-
-			switch-cpu@0 {
-				compatible = "qcom,ess-switch-cpu";
-				reg = <0>;
-			};
-
-			switch-cpu@1 {
-				compatible = "qcom,ess-switch-cpu";
-				reg = <1>;
-			};
-		};
-	};
-
-	aliases {
-		serial0 = &blsp1_uart5;
-		led-boot = &led_system_yellow;
-		led-failsafe = &led_system_yellow;
-		led-running = &led_system_blue;
-		led-upgrade = &led_system_yellow;
-		label-mac-device = &dp2;
-	};
-
-	chosen {
-		stdout-path = "serial0:115200n8";
-		bootargs-append = " ubi.mtd=rootfs root=/dev/ubiblock0_1 rootfstype=squashfs rootwait";
-	};
-
 	keys {
 		compatible = "gpio-keys";
 
@@ -329,13 +106,33 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 			linux,code = <KEY_RESTART>;
 		};
 	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_system_blue: system-blue {
+			label = "blue:system";
+			gpios = <&tlmm 21 GPIO_ACTIVE_HIGH>;
+		};
+
+		led_system_yellow: system-yellow {
+			label = "yellow:system";
+			gpios = <&tlmm 22 GPIO_ACTIVE_HIGH>;
+		};
+
+		network-blue {
+			label = "blue:network";
+			gpios = <&tlmm 42 GPIO_ACTIVE_HIGH>;
+		};
+
+		network-yellow {
+			label = "yellow:network";
+			gpios = <&tlmm 43 GPIO_ACTIVE_HIGH>;
+		};
+	};
 };
 
 &blsp1_uart5 {
-	status = "okay";
-};
-
-&prng {
 	status = "okay";
 };
 
@@ -347,26 +144,42 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 	status = "okay";
 };
 
-&qpic_bam {
+&mdio {
 	status = "okay";
-};
+	pinctrl-0 = <&mdio_pins>;
+	pinctrl-names = "default";
+	reset-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
 
-&tlmm {
-	mdio_pins: mdio-pins {
-		mdc {
-			pins = "gpio68";
-			function = "mdc";
-			drive-strength = <8>;
-			bias-pull-up;
+	ethernet-phy-package@0 {
+		compatible = "qcom,qca8075-package";
+		reg = <0>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethernet-phy@1 {
+			reg = <1>;
+			compatible = "ethernet-phy-ieee802.3-c22";
 		};
 
-		mdio {
-			pins = "gpio69";
-			function = "mdio";
-			drive-strength = <8>;
-			bias-pull-up;
+		ethernet-phy@2 {
+			reg = <2>;
+			compatible = "ethernet-phy-ieee802.3-c22";
+		};
+
+		ethernet-phy@3 {
+			reg = <3>;
+			compatible = "ethernet-phy-ieee802.3-c22";
+		};
+
+		ethernet-phy@4 {
+			reg = <4>;
+			compatible = "ethernet-phy-ieee802.3-c22";
 		};
 	};
+};
+
+&qpic_bam {
+	status = "okay";
 };
 
 &qpic_nand {
@@ -477,44 +290,14 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 	};
 };
 
-&mdio {
+&prng {
 	status = "okay";
-	pinctrl-0 = <&mdio_pins>;
-	pinctrl-names = "default";
-	reset-gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
-
-	ethernet-phy-package@0 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		compatible = "qcom,qca8075-package";
-		reg = <0>;
-
-		qca8075_1: ethernet-phy@1 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <1>;
-		};
-
-		qca8075_2: ethernet-phy@2 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <2>;
-		};
-
-		qca8075_3: ethernet-phy@3 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <3>;
-		};
-
-		qca8075_4: ethernet-phy@4 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <4>;
-		};
-	};
 };
 
 &switch {
 	status = "okay";
-	switch_lan_bmp = <(3 | 4 | 5)>;
-	switch_wan_bmp = <2>;
+	switch_lan_bmp = <(BIT(3) | BIT(4) | BIT(5))>;
+	switch_wan_bmp = <BIT(2)>;
 	switch_mac_mode = <0>;
 
 	qcom,port_phyinfo {
@@ -537,13 +320,18 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 	};
 };
 
-&edma {
-	status = "okay";
+&tlmm {
+	mdio_pins: mdio-pins {
+		pins = "gpio68", "gpio69";
+		function = "mdio";
+		drive-strength = <8>;
+		bias-pull-up;
+	};
 };
 
 &dp2 {
 	status = "okay";
-	phy-handle = <&qca8075_1>;
+	phy-handle = <&ethernet_phy_1>;
 	label = "wan";
 	nvmem-cells = <&macaddr_dp2>;
 	nvmem-cell-names = "mac-address";
@@ -551,7 +339,7 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 
 &dp3 {
 	status = "okay";
-	phy-handle = <&qca8075_2>;
+	phy-handle = <&ethernet_phy_2>;
 	label = "lan1";
 	nvmem-cells = <&macaddr_dp3>;
 	nvmem-cell-names = "mac-address";
@@ -559,7 +347,7 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 
 &dp4 {
 	status = "okay";
-	phy-handle = <&qca8075_3>;
+	phy-handle = <&ethernet_phy_3>;
 	label = "lan2";
 	nvmem-cells = <&macaddr_dp4>;
 	nvmem-cell-names = "mac-address";
@@ -567,22 +355,29 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 
 &dp5 {
 	status = "okay";
-	phy-handle = <&qca8075_4>;
+	phy-handle = <&ethernet_phy_4>;
 	label = "lan3";
 	nvmem-cells = <&macaddr_dp5>;
 	nvmem-cell-names = "mac-address";
 };
 
+&edma {
+	status = "okay";
+};
+
 &wifi {
 	status = "okay";
-	qcom,ath11k-calibration-variant = "Redmi-AX6";
+	qcom,ath11k-calibration-variant = "Xiaomi-AX3600";
 	qcom,ath11k-fw-memory-mode = <2>;
 };
 EOF
 
+# 修正 AX6 设备树（依赖正确的 ax3600.dtsi）
 cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
-// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-/* Copyright (c) 2021, Zhijun You <hujy652@gmail.com> */
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * Copyright (c) 2021, Zhijun You <hujy652@gmail.com>
+ */
 
 /dts-v1/;
 
@@ -591,30 +386,6 @@ cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 / {
 	model = "Redmi AX6";
 	compatible = "redmi,ax6", "qcom,ipq8074";
-
-	leds {
-		compatible = "gpio-leds";
-
-		led_system_blue: system-blue {
-			label = "blue:system";
-			gpios = <&tlmm 21 GPIO_ACTIVE_HIGH>;
-		};
-
-		led_system_yellow: system-yellow {
-			label = "yellow:system";
-			gpios = <&tlmm 22 GPIO_ACTIVE_HIGH>;
-		};
-
-		network-blue {
-			label = "blue:network";
-			gpios = <&tlmm 42 GPIO_ACTIVE_HIGH>;
-		};
-
-		network-yellow {
-			label = "yellow:network";
-			gpios = <&tlmm 43 GPIO_ACTIVE_HIGH>;
-		};
-	};
 };
 
 &wifi {
@@ -622,11 +393,9 @@ cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 };
 EOF
 
-# 3. 重新编写 ipq807x.mk（核心：IMAGE_SIZE 对应 256MB Flash 总容量）
+# 3. 重新编写 ipq807x.mk（IMAGE_SIZE 匹配 256MB Flash 总容量）
 MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
-# 备份原文件
 [ -f "$MK_FILE" ] && cp "$MK_FILE" "$MK_FILE.bak"
-# 完全重新写入，仅保留 redmi_ax6 定义 + 正确的 256MB Flash 容量配置
 cat > "$MK_FILE" << 'EOF'
 # SPDX-License-Identifier: GPL-2.0-only
 #
@@ -637,9 +406,9 @@ define Device/redmi_ax6
   DEVICE_MODEL := AX6
   DEVICE_DTS := ipq8071-ax6
   DEVICE_DTS_DIR := ../dts
-  # 核心修正：256MB Flash 总容量 = 256*1024=262144KB，扣除4MB冗余（避免编译溢出）
-  IMAGE_SIZE := 258048k  
-  # NAND Flash 硬件参数适配（必须配置，否则固件写入失败）
+  # 256MB Flash 总容量 = 262144KB，扣除4MB冗余（262144-4096=258048）
+  IMAGE_SIZE := 258048k
+  # NAND Flash 硬件参数（必须配置）
   BLOCKSIZE := 128k
   PAGESIZE := 2048
   SUBPAGESIZE := 2048
@@ -655,4 +424,4 @@ echo "✅ ipq807x.mk 已重新编写（IMAGE_SIZE 匹配 256MB Flash 总容量�
 # 4. 删除内核补丁目录（避免冲突）
 rm -rf target/linux/qualcommax/patches-6.12
 
-echo "✅ DIY 脚本执行完成"
+echo "✅ DIY 脚本执行完成（已修复 DTS 语法错误）"
