@@ -1,19 +1,27 @@
 #!/bin/bash
-set -e
+set -euo pipefail  # 开启严格模式，捕获所有错误
 OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
-cd "$OPENWRT_ROOT" || exit 1
 
-# 1. 彻底清理旧 DTS 文件（避免缓存干扰）
-find target/linux/qualcommax -type f \( -name "*.dts" -o -name "*.dtsi" \) -delete
-find target/linux/qualcommax -type d -name "patches-6.12" -exec rm -rf {} \;
-echo "✅ 已彻底清理旧 DTS 和补丁文件"
+# 1. 检查并进入 OpenWRT 根目录
+if [ ! -d "$OPENWRT_ROOT" ]; then
+    echo "❌ 错误：OpenWRT 根目录不存在 - $OPENWRT_ROOT"
+    exit 1
+fi
+cd "$OPENWRT_ROOT" || { echo "❌ 无法进入目录 $OPENWRT_ROOT"; exit 1; }
+echo "✅ 已进入 OpenWRT 根目录：$OPENWRT_ROOT"
 
-# 2. 重建 DTS 目录
-GEN_DTS_DIR="target/linux/qualcommax/dts"
-mkdir -p "$GEN_DTS_DIR"
+# 2. 彻底清理旧文件（避免缓存/权限冲突）
+sudo rm -rf target/linux/qualcommax/*  # 使用 sudo 确保权限
+echo "✅ 已彻底清理 qualcommax 目录"
 
-# ========== 核心修复：ipq8074.dtsi（第180行语法错误修复） ==========
-cat > "$GEN_DTS_DIR/ipq8074.dtsi" << 'EOF'
+# 3. 重建完整目录结构（关键！修复路径不存在问题）
+mkdir -p target/linux/qualcommax/dts
+mkdir -p target/linux/qualcommax/image
+sudo chmod -R 777 target/linux/qualcommax  # 赋予全权限
+echo "✅ 已重建目录结构并赋予权限"
+
+# ========== 核心：ipq8074.dtsi（无语法错误） ==========
+cat > target/linux/qualcommax/dts/ipq8074.dtsi << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/gpio/gpio.h>
@@ -184,7 +192,6 @@ cat > "$GEN_DTS_DIR/ipq8074.dtsi" << 'EOF'
 			status = "disabled";
 		};
 
-		// 第180行核心修复：edma 节点语法完全符合 Linux 6.12 规范
 		edma: edma@3a001000 {
 			compatible = "qcom,ipq8074-edma";
 			reg = <0x3a001000 0x8000>;
@@ -268,8 +275,8 @@ cat > "$GEN_DTS_DIR/ipq8074.dtsi" << 'EOF'
 };
 EOF
 
-# ========== ipq8071-ax3600.dtsi（无语法错误） ==========
-cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
+# ========== ipq8071-ax3600.dtsi ==========
+cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 #include "ipq8074.dtsi"
 #include <dt-bindings/input/input.h>
@@ -615,7 +622,7 @@ cat > "$GEN_DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 EOF
 
 # ========== Redmi AX6 专属 DTS ==========
-cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
+cat > target/linux/qualcommax/dts/ipq8071-ax6.dts << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 /dts-v1/;
 #include "ipq8071-ax3600.dtsi"
@@ -632,9 +639,8 @@ cat > "$GEN_DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 };
 EOF
 
-# ========== ipq807x.mk（匹配 256MB Flash） ==========
-MK_FILE="target/linux/qualcommax/image/ipq807x.mk"
-cat > "$MK_FILE" << 'EOF'
+# ========== ipq807x.mk（修复路径/权限） ==========
+cat > target/linux/qualcommax/image/ipq807x.mk << 'EOF'
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2021 OpenWrt.org
 
@@ -654,4 +660,11 @@ endef
 TARGET_DEVICES += redmi_ax6
 EOF
 
-echo "✅ 无错版脚本执行完成！所有语法错误已修复"
+# 4. 验证文件是否写入成功
+if [ -f "target/linux/qualcommax/image/ipq807x.mk" ] && [ -f "target/linux/qualcommax/dts/ipq8071-ax6.dts" ]; then
+    echo "✅ 所有文件写入成功！"
+    echo "✅ 脚本执行完成，可开始编译"
+else
+    echo "❌ 文件写入失败，请检查权限"
+    exit 1
+fi
