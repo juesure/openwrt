@@ -34,18 +34,46 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo apt update -y && sudo apt full-upgrade -y && sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools parted kmod zip gh
+          sudo apt update -y && sudo apt full-upgrade -y && sudo apt install -y \
+            build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git \
+            libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget \
+            libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools \
+            parted kmod zip gh python3 python3-pip
           sudo timedatectl set-timezone "$TZ"
-          mkdir -p "$WORK_DIR" && chmod 777 "$WORK_DIR"
-          [ ! -f "$DIY_SCRIPT" ] && { printf "❌ DIY脚本不存在\n"; exit 1; } && chmod +x "$DIY_SCRIPT"
-          [ ! -f "$CONFIG_FILE" ] && { printf "❌ 配置文件不存在\n"; exit 1; }
-          mkdir -p "$FIRMWARE_OUTPUT_DIR" && chmod 777 "$FIRMWARE_OUTPUT_DIR"
+          # 修复1：先创建父目录再赋权，避免路径不存在
+          mkdir -p "$WORK_DIR" "$FIRMWARE_OUTPUT_DIR"
+          chmod -R 777 "$WORK_DIR" "$FIRMWARE_OUTPUT_DIR"
+          # 修复2：优化文件存在性校验逻辑，避免空路径误判
+          if [ ! -f "$DIY_SCRIPT" ]; then
+              printf "❌ DIY脚本不存在：%s\n" "$DIY_SCRIPT"
+              exit 1
+          fi
+          chmod +x "$DIY_SCRIPT"
+          if [ ! -f "$CONFIG_FILE" ]; then
+              printf "❌ 配置文件不存在：%s\n" "$CONFIG_FILE"
+              exit 1
+          fi
+          printf "✅ 环境初始化完成\n"
 
       - name: Clone Source
         run: |
-          cd "$WORK_DIR" || { printf "❌ 进入工作目录失败\n"; exit 1; }
-          for i in {1..3}; do git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt && break; rm -rf openwrt; sleep 5; done
-          [ ! -d "$WORK_DIR/openwrt" ] && { printf "❌ 源码克隆失败\n"; exit 1; }
+          cd "$WORK_DIR" || { printf "❌ 进入工作目录失败：%s\n" "$WORK_DIR"; exit 1; }
+          # 修复3：优化克隆重试逻辑，增加错误提示
+          for i in {1..3}; do
+              if git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt; then
+                  printf "✅ 源码克隆成功（第%d次尝试）\n" "$i"
+                  break
+              fi
+              printf "⚠️ 第%d次克隆失败，5秒后重试\n" "$i"
+              rm -rf openwrt
+              sleep 5
+          done
+          if [ ! -d "$WORK_DIR/openwrt" ]; then
+              printf "❌ 源码克隆失败（3次重试均失败）\n"
+              exit 1
+          fi
+          # 修复4：删除无效软链接（避免路径冲突）
+          rm -f /home/runner/work/openwrt/openwrt/openwrt
           ln -sf "$WORK_DIR/openwrt" /home/runner/work/openwrt/openwrt/openwrt
           chmod -R 755 "$WORK_DIR/openwrt"
           printf "✅ 源码克隆完成\n"
@@ -53,7 +81,7 @@ jobs:
       - name: Preprocess
         run: |
           OPENWRT_SRC="$WORK_DIR/openwrt"
-          cd "$OPENWRT_SRC" || exit 1
+          cd "$OPENWRT_SRC" || { printf "❌ 进入源码目录失败：%s\n" "$OPENWRT_SRC"; exit 1; }
           printf "🔧 当前工作目录：%s\n" "$(pwd)"
           
           chmod +x "$DIY_SCRIPT"
@@ -62,114 +90,143 @@ jobs:
               exit 1
           fi
           
-          "$DIY_SCRIPT" || {
-              printf "❌ DIY脚本执行失败（日志：）\n"
-              cat "$DIY_SCRIPT" 2>/dev/null
+          # 修复5：DIY脚本执行失败时打印详细日志
+          if ! "$DIY_SCRIPT"; then
+              printf "❌ DIY脚本执行失败，脚本内容：\n"
+              cat "$DIY_SCRIPT"
+              printf "\nDIY脚本执行日志（最后50行）：\n"
+              tail -50 "$OPENWRT_SRC/diy_script.log" 2>/dev/null || true
               exit 1
-          }
+          fi
           
           # 修复json文件（解决image_size解析错误）
           JSON_FILE=$(find "$OPENWRT_SRC" -name "json_add_image_info.py" 2>/dev/null | head -1)
           if [ -n "$JSON_FILE" ]; then
               sed -i 's/return int(image_size)/return int(image_size, 0)/' "$JSON_FILE"
-              printf "✅ 已修复：%s\n" "$JSON_FILE"
+              printf "✅ 已修复image_size解析：%s\n" "$JSON_FILE"
           else
               printf "⚠️ 未找到json_add_image_info.py，跳过修复\n"
           fi
           
           # 禁用fwupd（避免依赖缺失）
-          printf "%s\n" "CONFIG_PACKAGE_fwupd=n" "CONFIG_PACKAGE_fwupd-libs=n" "CONFIG_FWUPD_PLUGIN_FLASHROM=n" >> "$OPENWRT_SRC/.config"
+          {
+              echo "CONFIG_PACKAGE_fwupd=n"
+              echo "CONFIG_PACKAGE_fwupd-libs=n"
+              echo "CONFIG_FWUPD_PLUGIN_FLASHROM=n"
+          } >> "$OPENWRT_SRC/.config"
           
+          # 修复6：配置文件复制后执行defconfig，并重定向日志
           cp "$CONFIG_FILE" "$OPENWRT_SRC/.config"
-          make defconfig -e > /dev/null 2>&1
+          if ! make defconfig -e > defconfig.log 2>&1; then
+              printf "❌ defconfig执行失败，日志：\n"
+              cat defconfig.log
+              exit 1
+          fi
           printf "✅ Preprocess 步骤完成\n"
 
       - name: Compile
         id: compile
         run: |
-          cd "$WORK_DIR/openwrt"
+          cd "$WORK_DIR/openwrt" || exit 1
           
-          # ========== 关键修复：修正DTS文件复制路径 ==========
+          # 修复7：修正DTS文件复制逻辑（兼容不同OpenWRT版本路径）
           echo "🔧 修复设备树文件路径问题..."
           DTS_SRC="$WORK_DIR/openwrt/target/linux/qualcommax/dts"
-          # 正确的目标目录：包含 linux-qualcommax_ipq807x 子目录
-          DTS_DST="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-qualcommax_ipq807x/dts"
-          mkdir -p "$DTS_DST"
+          # 兼容两种常见的DTS编译路径
+          DTS_DST1="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-qualcommax_ipq807x/dts"
+          DTS_DST2="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-qualcommax_ipq807x/ipq807x-dts"
+          mkdir -p "$DTS_DST1" "$DTS_DST2"
           # 复制所有 .dts 和 .dtsi 文件到正确路径
-          cp -f "$DTS_SRC"/*.dts "$DTS_DST/" 2>/dev/null || true
-          cp -f "$DTS_SRC"/*.dtsi "$DTS_DST/" 2>/dev/null || true
-          echo "✅ 设备树文件已复制到 $DTS_DST"
-          ls -lh "$DTS_DST/" || true
-          # ========================================
+          cp -f "$DTS_SRC"/*.dts "$DTS_SRC"/*.dtsi "$DTS_DST1/" 2>/dev/null || true
+          cp -f "$DTS_SRC"/*.dts "$DTS_SRC"/*.dtsi "$DTS_DST2/" 2>/dev/null || true
+          echo "✅ 设备树文件已复制到："
+          ls -lh "$DTS_DST1/" || printf "⚠️ %s 为空\n" "$DTS_DST1"
+          ls -lh "$DTS_DST2/" || printf "⚠️ %s 为空\n" "$DTS_DST2"
           
           echo "📥 下载编译依赖..."
-          make download -j$(nproc) 2>&1 | tee download.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 下载依赖失败"
+          if ! make download -j$(nproc) 2>&1 | tee download.log; then
+            echo "❌ 下载依赖失败，日志最后50行："
             tail -50 download.log
             exit 1
           fi
           
           echo "🔨 编译工具链..."
-          make tools/compile -j$(nproc) V=s 2>&1 | tee toolchain.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 工具链编译失败"
+          if ! make tools/compile -j$(nproc) V=s 2>&1 | tee toolchain.log; then
+            echo "❌ 工具链编译失败，日志最后100行："
             tail -100 toolchain.log
             exit 1
           fi
           
-          echo "🔨 编译固件（多线程）..."
-          #make -j$(nproc) 2>&1 | tee compile.log
-          make -j1 V=s 2>&1 | tee compile_single.log
-          COMPILE_STATUS=${PIPESTATUS[0]}
-          
-          # 多线程失败则单线程重试
-          if [ $COMPILE_STATUS -ne 0 ]; then
-            echo "⚠️ 多线程编译失败，单线程重试..."
-            make -j1 V=s 2>&1 | tee compile_single.log
-            COMPILE_STATUS=${PIPESTATUS[0]}
+          echo "🔨 编译固件（单线程，避免编译错误）..."
+          # 修复8：移除多线程编译逻辑，直接单线程（IPQ807x编译多线程易出错）
+          if ! make -j1 V=s 2>&1 | tee compile_single.log; then
+            echo "❌ 单线程编译失败，日志最后200行："
+            tail -200 compile_single.log
+            exit 1
           fi
           
-          # 校验编译结果
+          # 校验编译结果（优化匹配规则）
           FIRMWARE_DIR="$WORK_DIR/openwrt/bin/targets/qualcommax/ipq807x"
-          if [ $COMPILE_STATUS -eq 0 ] && [ -d "$FIRMWARE_DIR" ] && find "$FIRMWARE_DIR" -maxdepth 1 -name "*redmi_ax6*" | grep -q .; then
+          FIRMWARE_FILES=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "*redmi_ax6*" -type f)
+          if [ -d "$FIRMWARE_DIR" ] && [ -n "$FIRMWARE_FILES" ]; then
             echo "✅ 固件编译成功"
             echo "status=success" >> "$GITHUB_OUTPUT"
             echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
+            echo "📂 生成的固件文件："
             ls -lh "$FIRMWARE_DIR"/*redmi_ax6*
           else
             echo "❌ 固件未生成"
+            echo "📂 编译输出目录内容："
+            ls -lh "$FIRMWARE_DIR" 2>/dev/null || echo "目录不存在"
             echo "编译日志最后200行："
-            tail -200 compile.log
+            tail -200 compile_single.log
             exit 1
           fi
 
       - name: Generate Firmware
         if: steps.compile.outputs.status == 'success'
         run: |
+          # 检查输出目录是否存在
+          if [ ! -d "$FIRMWARE_OUTPUT_DIR" ]; then
+              printf "❌ 固件输出目录不存在：%s\n" "$FIRMWARE_OUTPUT_DIR"
+              exit 1
+          fi
           cd "$FIRMWARE_OUTPUT_DIR" || exit 1
           BUILD_TIME="${{ env.BUILD_TIME }}"
           
           echo "📂 编译输出目录内容："
           ls -lh
           
-          # 复制固件到输出目录
+          # 复制固件到输出目录（创建目录避免失败）
           mkdir -p /home/runner/firmware
-          cp *redmi_ax6*.bin /home/runner/firmware/ 2>/dev/null || true
-          cp *ubi /home/runner/firmware/ 2>/dev/null || true
+          cp -f *redmi_ax6*.bin /home/runner/firmware/ 2>/dev/null || true
+          cp -f *ubi /home/runner/firmware/ 2>/dev/null || true
           
-          # 提取 rootfs.ubi（若未直接生成）
-          if ! ls /home/runner/firmware/*rootfs.ubi 1>/dev/null 2>&1; then
-              SYSUPGRADE=$(ls *sysupgrade.bin | head -1)
-              if [ -n "$SYSUPGRADE" ]; then
-                  dd if="$SYSUPGRADE" of=/home/runner/firmware/redmi_ax6_rootfs.ubi bs=1M skip=4
-                  echo "✅ 已从 sysupgrade.bin 提取 rootfs.ubi"
+          # 提取 rootfs.ubi（增加有效性校验）
+          SYSUPGRADE=$(ls *sysupgrade.bin 2>/dev/null | head -1)
+          if [ -n "$SYSUPGRADE" ] && [ ! -f /home/runner/firmware/*rootfs.ubi ]; then
+              echo "🔧 从sysupgrade.bin提取rootfs.ubi..."
+              dd if="$SYSUPGRADE" of=/home/runner/firmware/redmi_ax6_rootfs_${BUILD_TIME}.ubi bs=1M skip=4
+              if [ -f /home/runner/firmware/redmi_ax6_rootfs_${BUILD_TIME}.ubi ]; then
+                  echo "✅ 已提取rootfs.ubi：$(ls -lh /home/runner/firmware/*rootfs.ubi | awk '{print $9, $5}')"
+              else
+                  echo "⚠️ rootfs.ubi提取失败"
               fi
           fi
           
-          # 发布固件到 GitHub Release
-          gh release create "AX6-256M-${BUILD_TIME}" --title "Redmi AX6 256M ${BUILD_TIME}" --notes "Redmi AX6 256M Firmware" /home/runner/firmware/* 2>/dev/null || printf "⚠️ Release已存在\n"
-          printf "✅ 固件发布完成\n"
+          # 发布固件到 GitHub Release（优化命名和备注）
+          RELEASE_TAG="AX6-256M-${BUILD_TIME}"
+          if ! gh release create "$RELEASE_TAG" \
+              --title "Redmi AX6 256M Firmware ${BUILD_TIME}" \
+              --notes "### Redmi AX6 256M 固件编译信息
+- 编译时间：${BUILD_TIME}
+- 源码分支：${REPO_BRANCH}
+- 平台：qualcommax/ipq807x" \
+              /home/runner/firmware/*; then
+              printf "⚠️ Release已存在（%s），跳过发布\n" "$RELEASE_TAG"
+          else
+              printf "✅ 固件发布成功：https://github.com/%s/%s/releases/tag/%s\n" "${{ github.repository }}" "$RELEASE_TAG"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
