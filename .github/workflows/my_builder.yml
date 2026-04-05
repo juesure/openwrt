@@ -214,18 +214,13 @@ jobs:
               fi
           fi
           
-          # 发布固件到 GitHub Release（优化命名和备注）
+          # 修复核心语法错误：GitHub Release命令改为单行，避免YAML换行解析错误
           RELEASE_TAG="AX6-256M-${BUILD_TIME}"
-          if ! gh release create "$RELEASE_TAG" \
-              --title "Redmi AX6 256M Firmware ${BUILD_TIME}" \
-              --notes "### Redmi AX6 256M 固件编译信息
-- 编译时间：${BUILD_TIME}
-- 源码分支：${REPO_BRANCH}
-- 平台：qualcommax/ipq807x" \
-              /home/runner/firmware/*; then
+          RELEASE_NOTES="### Redmi AX6 256M 固件编译信息\n- 编译时间：${BUILD_TIME}\n- 源码分支：${REPO_BRANCH}\n- 平台：qualcommax/ipq807x"
+          if ! gh release create "$RELEASE_TAG" --title "Redmi AX6 256M Firmware ${BUILD_TIME}" --notes "$RELEASE_NOTES" /home/runner/firmware/*; then
               printf "⚠️ Release已存在（%s），跳过发布\n" "$RELEASE_TAG"
           else
-              printf "✅ 固件发布成功：https://github.com/%s/%s/releases/tag/%s\n" "${{ github.repository }}" "$RELEASE_TAG"
+              printf "✅ 固件发布成功：https://github.com/%s/releases/tag/%s\n" "${{ github.repository }}" "$RELEASE_TAG"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
