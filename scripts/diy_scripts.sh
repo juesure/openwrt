@@ -1,34 +1,34 @@
 #!/bin/bash
 set -euo pipefail
+
+# ===================== 核心配置 =====================
 OPENWRT_ROOT="/home/runner/work/openwrt/openwrt/workdir/openwrt"
-LOG_FILE="$OPENWRT_ROOT/compile.log"
+DIY_LOG="$OPENWRT_ROOT/diy_script.log"
+DTS_DIR="$OPENWRT_ROOT/target/linux/qualcommax/dts"
+IMAGE_DIR="$OPENWRT_ROOT/target/linux/qualcommax/image"
 
-# 1. 初始化日志
-echo "========== 编译开始：$(date) ==========" > "$LOG_FILE"
-exec > >(tee -a "$LOG_FILE") 2>&1  # 所有输出写入日志
+# ===================== 初始化日志 =====================
+echo "========== DIY脚本开始执行：$(date) ==========" > "$DIY_LOG"
+exec > >(tee -a "$DIY_LOG") 2>&1  # 所有输出写入日志
 
-# 2. 检查并进入 OpenWRT 根目录
+# ===================== 步骤1：检查基础目录 =====================
+echo "🔧 步骤1：检查基础目录..."
 if [ ! -d "$OPENWRT_ROOT" ]; then
-    echo "❌ 错误：OpenWRT 根目录不存在 - $OPENWRT_ROOT"
+    echo "❌ OpenWRT源码目录不存在：$OPENWRT_ROOT"
     exit 1
 fi
-cd "$OPENWRT_ROOT" || { echo "❌ 无法进入目录 $OPENWRT_ROOT"; exit 1; }
-echo "✅ 已进入 OpenWRT 根目录：$OPENWRT_ROOT"
+cd "$OPENWRT_ROOT" || { echo "❌ 进入OpenWRT目录失败"; exit 1; }
+echo "✅ 当前工作目录：$(pwd)"
 
-# 3. 彻底清理旧编译产物（关键！）
-sudo rm -rf bin/targets/qualcommax/*
-sudo rm -rf build_dir/target-aarch64_cortex-a53_musl/*
-sudo rm -rf staging_dir/target-aarch64_cortex-a53_musl/*
-echo "✅ 已清理旧编译产物"
+# ===================== 步骤2：创建设备树目录 =====================
+echo -e "\n🔧 步骤2：创建设备树目录..."
+mkdir -p "$DTS_DIR" "$IMAGE_DIR"
+chmod -R 777 "$DTS_DIR" "$IMAGE_DIR"
+echo "✅ 设备树目录已创建：$DTS_DIR"
 
-# 4. 重建 Redmi AX6 设备树（修复后的无错版本）
-sudo rm -rf target/linux/qualcommax/*
-mkdir -p target/linux/qualcommax/dts
-mkdir -p target/linux/qualcommax/image
-sudo chmod -R 777 target/linux/qualcommax
-
-# ========== ipq8074.dtsi ==========
-cat > target/linux/qualcommax/dts/ipq8074.dtsi << 'EOF'
+# ===================== 步骤3：写入IPQ8074.dtsi =====================
+echo -e "\n🔧 步骤3：写入ipq8074.dtsi..."
+cat > "$DTS_DIR/ipq8074.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/gpio/gpio.h>
@@ -184,9 +184,7 @@ cat > target/linux/qualcommax/dts/ipq8074.dtsi << 'EOF'
 			clocks = <&gcc GCC_QPIC_CLK>,
 				 <&gcc GCC_QPIC_AHB_CLK>;
 			clock-names = "core", "aon";
-			dmas = <&qpic_bam 0>,
-			       <&qpic_bam 1>,
-			       <&qpic_bam 2>;
+			dmas = <&qpic_bam 0>, <&qpic_bam 1>, <&qpic_bam 2>;
 			dma-names = "tx", "rx", "cmd";
 			status = "disabled";
 		};
@@ -281,9 +279,15 @@ cat > target/linux/qualcommax/dts/ipq8074.dtsi << 'EOF'
 	};
 };
 EOF
+if [ ! -f "$DTS_DIR/ipq8074.dtsi" ]; then
+    echo "❌ ipq8074.dtsi 写入失败"
+    exit 1
+fi
+echo "✅ ipq8074.dtsi 写入成功"
 
-# ========== ipq8071-ax3600.dtsi ==========
-cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'EOF'
+# ===================== 步骤4：写入ipq8071-ax3600.dtsi =====================
+echo -e "\n🔧 步骤4：写入ipq8071-ax3600.dtsi..."
+cat > "$DTS_DIR/ipq8071-ax3600.dtsi" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 #include "ipq8074.dtsi"
 #include <dt-bindings/input/input.h>
@@ -627,9 +631,15 @@ cat > target/linux/qualcommax/dts/ipq8071-ax3600.dtsi << 'EOF'
 	status = "okay";
 };
 EOF
+if [ ! -f "$DTS_DIR/ipq8071-ax3600.dtsi" ]; then
+    echo "❌ ipq8071-ax3600.dtsi 写入失败"
+    exit 1
+fi
+echo "✅ ipq8071-ax3600.dtsi 写入成功"
 
-# ========== ipq8071-ax6.dts ==========
-cat > target/linux/qualcommax/dts/ipq8071-ax6.dts << 'EOF'
+# ===================== 步骤5：写入ipq8071-ax6.dts =====================
+echo -e "\n🔧 步骤5：写入ipq8071-ax6.dts..."
+cat > "$DTS_DIR/ipq8071-ax6.dts" << 'EOF'
 // SPDX-License-Identifier: GPL-2.0-only OR MIT
 /dts-v1/;
 #include "ipq8071-ax3600.dtsi"
@@ -645,9 +655,15 @@ cat > target/linux/qualcommax/dts/ipq8071-ax6.dts << 'EOF'
 	qcom,ath11k-fw-memory-mode = <2>;
 };
 EOF
+if [ ! -f "$DTS_DIR/ipq8071-ax6.dts" ]; then
+    echo "❌ ipq8071-ax6.dts 写入失败"
+    exit 1
+fi
+echo "✅ ipq8071-ax6.dts 写入成功"
 
-# ========== ipq807x.mk ==========
-cat > target/linux/qualcommax/image/ipq807x.mk << 'EOF'
+# ===================== 步骤6：写入ipq807x.mk =====================
+echo -e "\n🔧 步骤6：写入ipq807x.mk..."
+cat > "$IMAGE_DIR/ipq807x.mk" << 'EOF'
 # SPDX-License-Identifier: GPL-2.0-only
 # Copyright (C) 2021 OpenWrt.org
 
@@ -666,40 +682,29 @@ define Device/redmi_ax6
 endef
 TARGET_DEVICES += redmi_ax6
 EOF
-
-# 5. 配置编译目标（关键！指定 Redmi AX6）
-echo "✅ 配置编译目标：Redmi AX6 (qualcommax/ipq807x)"
-make defconfig
-echo "CONFIG_TARGET_qualcommax=y" >> .config
-echo "CONFIG_TARGET_qualcommax_ipq807x=y" >> .config
-echo "CONFIG_TARGET_DEVICE_qualcommax_ipq807x_DEVICE_redmi_ax6=y" >> .config
-make defconfig  # 应用配置
-
-# 6. 开始编译（指定正确目标，记录日志）
-echo "✅ 开始编译 Redmi AX6 固件..."
-make -j$(nproc) target/linux/compile TARGET=qualcommax SUBTARGET=ipq807x DEVICE=redmi_ax6
-make -j$(nproc) package/install
-make -j$(nproc) target/install
-make -j$(nproc) package/index
-make -j$(nproc) json_overview_image_info
-make -j$(nproc) checksum
-
-# 7. 校验固件是否生成
-FIRMWARE_DIR="$OPENWRT_ROOT/bin/targets/qualcommax/ipq807x"
-if [ -d "$FIRMWARE_DIR" ]; then
-    FIRMWARE_FILE=$(ls "$FIRMWARE_DIR" | grep -E "openwrt-qualcommax-ipq807x-redmi_ax6-sysupgrade\.bin")
-    if [ -n "$FIRMWARE_FILE" ]; then
-        echo "✅ 固件生成成功！"
-        echo "📌 固件路径：$FIRMWARE_DIR/$FIRMWARE_FILE"
-        ls -lh "$FIRMWARE_DIR/$FIRMWARE_FILE"
-        exit 0
-    else
-        echo "❌ 固件文件未找到，编译日志："
-        tail -100 "$LOG_FILE"
-        exit 1
-    fi
-else
-    echo "❌ 固件目录不存在，编译日志："
-    tail -100 "$LOG_FILE"
+if [ ! -f "$IMAGE_DIR/ipq807x.mk" ]; then
+    echo "❌ ipq807x.mk 写入失败"
     exit 1
 fi
+echo "✅ ipq807x.mk 写入成功"
+
+# ===================== 步骤7：验证所有文件 =====================
+echo -e "\n🔧 步骤7：验证所有设备树文件..."
+FILES_TO_CHECK=(
+    "$DTS_DIR/ipq8074.dtsi"
+    "$DTS_DIR/ipq8071-ax3600.dtsi"
+    "$DTS_DIR/ipq8071-ax6.dts"
+    "$IMAGE_DIR/ipq807x.mk"
+)
+for FILE in "${FILES_TO_CHECK[@]}"; do
+    if [ ! -f "$FILE" ]; then
+        echo "❌ 缺失关键文件：$FILE"
+        exit 1
+    fi
+    echo "✅ 验证通过：$FILE (大小：$(du -h "$FILE" | awk '{print $1}'))"
+done
+
+# ===================== 完成 =====================
+echo -e "\n🎉 DIY脚本执行完成！所有文件已生成并验证"
+echo "========== DIY脚本结束：$(date) ==========" >> "$DIY_LOG"
+exit 0
