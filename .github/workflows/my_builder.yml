@@ -77,7 +77,6 @@ jobs:
           ln -sf "$WORK_DIR/openwrt" /home/runner/work/openwrt/openwrt/openwrt
           chmod -R 755 "$WORK_DIR/openwrt"
           printf "✅ 源码克隆完成\n"
-
       - name: Preprocess
         run: |
           OPENWRT_SRC="$WORK_DIR/openwrt"
@@ -90,40 +89,19 @@ jobs:
               exit 1
           fi
           
-          # 修复5：DIY脚本执行失败时打印详细日志
+          # 修复：强制生成日志文件，执行失败时打印完整日志
+          printf "🔧 执行DIY脚本：%s\n" "$DIY_SCRIPT"
           if ! "$DIY_SCRIPT"; then
-              printf "❌ DIY脚本执行失败，脚本内容：\n"
-              cat "$DIY_SCRIPT"
-              printf "\nDIY脚本执行日志（最后50行）：\n"
-              tail -50 "$OPENWRT_SRC/diy_script.log" 2>/dev/null || true
+              printf "❌ DIY脚本执行失败！完整日志：\n"
+              # 打印完整日志（如果存在）
+              if [ -f "$OPENWRT_SRC/diy_script.log" ]; then
+                  cat "$OPENWRT_SRC/diy_script.log"
+              else
+                  printf "⚠️ 无DIY脚本日志文件\n"
+              fi
               exit 1
           fi
           
-          # 修复json文件（解决image_size解析错误）
-          JSON_FILE=$(find "$OPENWRT_SRC" -name "json_add_image_info.py" 2>/dev/null | head -1)
-          if [ -n "$JSON_FILE" ]; then
-              sed -i 's/return int(image_size)/return int(image_size, 0)/' "$JSON_FILE"
-              printf "✅ 已修复image_size解析：%s\n" "$JSON_FILE"
-          else
-              printf "⚠️ 未找到json_add_image_info.py，跳过修复\n"
-          fi
-          
-          # 禁用fwupd（避免依赖缺失）
-          {
-              echo "CONFIG_PACKAGE_fwupd=n"
-              echo "CONFIG_PACKAGE_fwupd-libs=n"
-              echo "CONFIG_FWUPD_PLUGIN_FLASHROM=n"
-          } >> "$OPENWRT_SRC/.config"
-          
-          # 修复6：配置文件复制后执行defconfig，并重定向日志
-          cp "$CONFIG_FILE" "$OPENWRT_SRC/.config"
-          if ! make defconfig -e > defconfig.log 2>&1; then
-              printf "❌ defconfig执行失败，日志：\n"
-              cat defconfig.log
-              exit 1
-          fi
-          printf "✅ Preprocess 步骤完成\n"
-
       - name: Compile
         id: compile
         run: |
