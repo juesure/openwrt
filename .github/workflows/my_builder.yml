@@ -119,7 +119,8 @@ jobs:
           fi
           
           echo "🔨 编译固件（多线程）..."
-          make -j$(nproc) 2>&1 | tee compile.log
+          #make -j$(nproc) 2>&1 | tee compile.log
+          make -j1 V=s 2>&1 | tee compile_single.log
           COMPILE_STATUS=${PIPESTATUS[0]}
           
           # 多线程失败则单线程重试
