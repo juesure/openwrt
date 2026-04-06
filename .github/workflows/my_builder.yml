@@ -1,4 +1,4 @@
-name: Redmi AX6 (256M) Build 
+name: Redmi AX6 (256M) Build
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -12,7 +12,7 @@ env:
 
 on:
   push:
-    branches: [AX6_256M_FLASH_V1.1]
+    branches: [ AX6_256M_FLASH_V1.1 ]
   workflow_dispatch:
 
 jobs:
@@ -23,174 +23,110 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4.2.0
+        uses: actions/checkout@v4
         with:
           path: /home/runner/work/openwrt/openwrt
           fetch-depth: 1
 
-      - name: Initialize Env
-        env:
-          DEBIAN_FRONTEND: noninteractive
+      - name: Initialize Environment
         run: |
-          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo apt autoremove -y && sudo apt clean
-          sudo apt update -y && sudo apt full-upgrade -y && sudo apt install -y \
-            build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git \
-            libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget \
-            libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools \
-            parted kmod zip gh python3 python3-pip \
-            ncurses-term libncursesw5-dev ttyd expect
-          sudo timedatectl set-timezone "$TZ"
-          mkdir -p "$WORK_DIR" "$FIRMWARE_OUTPUT_DIR"
-          chmod -R 777 "$WORK_DIR" "$FIRMWARE_OUTPUT_DIR"
-          if [ ! -f "$DIY_SCRIPT" ]; then
-              printf "❌ DIY脚本不存在：%s\n" "$DIY_SCRIPT"; exit 1
-          fi
-          chmod +x "$DIY_SCRIPT"
-          if [ ! -f "$CONFIG_FILE" ]; then
-              printf "❌ 配置文件不存在：%s\n" "$CONFIG_FILE"; exit 1
-          fi
-          df -h
-          printf "✅ 环境初始化完成\n"
+          sudo apt update -y
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget libelf-dev device-tree-compiler
+          mkdir -p $WORK_DIR
+          timedatectl set-timezone "$TZ"
 
-      - name: Clone Source
+      - name: Clone OpenWrt Source
         run: |
-          cd "$WORK_DIR" || { printf "❌ 进入工作目录失败：%s\n" "$WORK_DIR"; exit 1; }
-          for i in {1..3}; do
-              if git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt; then
-                  printf "✅ 源码克隆成功（第%d次尝试）\n" "$i"; break
-              fi
-              printf "⚠️ 第%d次克隆失败，5秒后重试\n" "$i"
-              rm -rf openwrt; sleep 5
-          done
-          if [ ! -d "$WORK_DIR/openwrt" ]; then
-              printf "❌ 源码克隆失败（3次重试均失败）\n"; exit 1
-          fi
-          rm -f /home/runner/work/openwrt/openwrt/openwrt
-          ln -sf "$WORK_DIR/openwrt" /home/runner/work/openwrt/openwrt/openwrt
-          chmod -R 755 "$WORK_DIR/openwrt"
-          printf "✅ 源码克隆完成\n"
+          cd $WORK_DIR
+          git clone --depth=1 $REPO_URL -b $REPO_BRANCH openwrt
 
-      - name: Preprocess
+      - name: Preprocess Configuration
         run: |
-          OPENWRT_SRC="$WORK_DIR/openwrt"
-          cd "$OPENWRT_SRC" || { printf "❌ 进入源码目录失败：%s\n" "$OPENWRT_SRC"; exit 1; }
-          printf "🔧 当前工作目录：%s\n" "$(pwd)"
-          if [ ! -x "$DIY_SCRIPT" ]; then
-              printf "❌ 赋予DIY脚本权限失败：%s\n" "$DIY_SCRIPT"; exit 1
+          cd $WORK_DIR/openwrt
+          
+          # 执行DIY脚本
+          if [ -x "$DIY_SCRIPT" ]; then
+            "$DIY_SCRIPT"
           fi
-          printf "🔧 执行DIY脚本：%s\n" "$DIY_SCRIPT"
-          if ! "$DIY_SCRIPT"; then
-              printf "❌ DIY脚本执行失败！完整日志：\n"
-              if [ -f "$OPENWRT_SRC/diy_script.log" ]; then
-                  cat "$OPENWRT_SRC/diy_script.log"
-              else
-                  printf "⚠️ 无DIY脚本日志文件\n"
-              fi
-              exit 1
-          fi
-          JSON_FILE=$(find "$OPENWRT_SRC" -name "json_add_image_info.py" 2>/dev/null | head -1)
+          
+          # 修复Python脚本错误
+          JSON_FILE=$(find . -name "json_add_image_info.py" 2>/dev/null | head -1)
           if [ -n "$JSON_FILE" ]; then
-              sed -i 's/return int(image_size)/return int(image_size, 0)/' "$JSON_FILE"
-              printf "✅ 已修复image_size解析：%s\n" "$JSON_FILE"
-          else
-              printf "⚠️ 未找到json_add_image_info.py，跳过修复\n"
+            sed -i 's/return int(image_size)/return int(image_size, 0)/' "$JSON_FILE"
           fi
-          {
-              echo "CONFIG_PACKAGE_fwupd=n"
-              echo "CONFIG_PACKAGE_fwupd-libs=n"
-              echo "CONFIG_FWUPD_PLUGIN_FLASHROM=n"
-              echo "CONFIG_ALL_NONSHARED=n"
-              echo "CONFIG_AUTOREMOVE=n"
-              echo "CONFIG_COLLECT_KERNEL_DEBUG=n"
-              echo "CONFIG_DISABLE_MENUCONFIG=y"
-          } >> "$OPENWRT_SRC/.config"
-          cp "$CONFIG_FILE" "$OPENWRT_SRC/.config"
-          echo "🔧 生成非交互式defconfig..."
-          if ! make defconfig -e > defconfig.log 2>&1; then
-              printf "❌ defconfig执行失败，日志：\n"
-              cat defconfig.log; exit 1
-          fi
-          printf "✅ Preprocess 步骤完成\n"
+          
+          # ==============================================
+          # 【关键】复制原有配置，不覆盖，只追加
+          # ==============================================
+          cp -f "$CONFIG_FILE" .config
+          
+          # 追加必要配置（不修改原有内容）
+          cat >> .config << 'EOF'
+CONFIG_PACKAGE_fwupd=n
+CONFIG_PACKAGE_fwupd-libs=n
+CONFIG_FWUPD_PLUGIN_FLASHROM=n
+CONFIG_ALL_NONSHARED=n
+CONFIG_AUTOREMOVE=n
+CONFIG_COLLECT_KERNEL_DEBUG=n
+CONFIG_DISABLE_MENUCONFIG=y
 
-      - name: Compile
+# 强制启用 Redmi AX6 设备
+CONFIG_TARGET_qualcommax=y
+CONFIG_TARGET_qualcommax_ipq807x=y
+CONFIG_TARGET_qualcommax_ipq807x_DEVICE_redmi_ax6=y
+EOF
+
+          # 生成最终配置
+          make defconfig -j1 V=s
+
+      - name: Compile Firmware
         id: compile
         run: |
-          cd "$WORK_DIR/openwrt" || exit 1
-      
-          # ===================== 【终极干净修复：ipq8074.dtsi】 =====================
+          cd $WORK_DIR/openwrt
+
+          # 修复 DTS 设备树语法错误（ipq8074.dtsi）
           DTS_FILE="$WORK_DIR/openwrt/target/linux/qualcommax/dts/ipq8074.dtsi"
-          echo "====================================="
-          echo "🔧 彻底修复 DTS 语法错误（edma clocks）"
-      
-          # 强制覆盖 178-180 行，写成 100% 正确的格式
           sed -i '178,180c\				clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;\n				clock-names = "core", "axi";' "$DTS_FILE"
-      
-          echo "✅ 修复后 178-182 行："
-          sed -n '178,182p' "$DTS_FILE"
-          echo "====================================="
-          # ========================================================================
-      
+
           export TERM=xterm
           export NCURSES_NO_UTF8_ACS=1
-      
-          echo "🔧 复制设备树文件..."
+
+          # 复制设备树文件
           DTS_SRC="$WORK_DIR/openwrt/target/linux/qualcommax/dts"
           DTS_DST1="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-qualcommax_ipq807x/dts"
           DTS_DST2="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-qualcommax_ipq807x/ipq807x-dts"
           mkdir -p "$DTS_DST1" "$DTS_DST2"
-          cp -f "$DTS_SRC"/*.dts "$DTS_SRC"/*.dtsi "$DTS_DST1/" 2>/dev/null || true
-          cp -f "$DTS_SRC"/*.dts "$DTS_SRC"/*.dtsi "$DTS_DST2/" 2>/dev/null || true
-      
-          echo "🔧 生成配置..."
-          make defconfig -j1 V=s
-      
-          echo "📥 下载依赖..."
+          cp -f "$DTS_SRC"/*.dts "$DTS_SRC"/*.dtsi "$DTS_DST1/" 2>/dev/null
+          cp -f "$DTS_SRC"/*.dts "$DTS_SRC"/*.dtsi "$DTS_DST2/" 2>/dev/null
+
+          # 开始编译
+          make defconfig
           make download -j$(nproc)
-      
-          echo "🔨 编译工具链..."
-          make tools/compile -j$(nproc) V=s
-      
-          echo "🔨 开始编译固件..."
+          make tools/compile -j$(nproc)
           make -j1 V=s IGNORE_ERRORS=1 2>&1 | tee compile.log
-          COMPILE_STATUS=$?
-      
-          FIRMWARE_FILES=$(find "$WORK_DIR/openwrt/bin" -name "*redmi_ax6*" -type f 2>/dev/null)
-          if [ $COMPILE_STATUS -eq 0 ] && [ -n "$FIRMWARE_FILES" ]; then
-            echo "✅ 编译成功！"
-            echo "status=success" >> "$GITHUB_OUTPUT"
-            echo "BUILD_TIME=$(date +%Y%m%d_%H%H)" >> "$GITHUB_ENV"
+
+          # 检查固件是否生成
+          FIRMWARE_FILES=$(find "$WORK_DIR/openwrt/bin" -name "*redmi_ax6*" -type f)
+          if [ -n "$FIRMWARE_FILES" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
             ls -lh $FIRMWARE_FILES
           else
-            echo "❌ 编译失败"
+            echo "ERROR: Firmware not generated!"
             tail -200 compile.log
             exit 1
           fi
-      - name: Generate Firmware
+
+      - name: Prepare Firmware Files
         if: steps.compile.outputs.status == 'success'
         run: |
-          cd "$FIRMWARE_OUTPUT_DIR" || exit 1
-          echo "📂 编译输出目录：$(pwd)"
-          ls -lh
-      
-          # 创建固件目录
           mkdir -p /home/runner/firmware
-      
-          # 复制所有固件（sysupgrade / factory / ubi 全都要）
-          cp -f *.bin /home/runner/firmware/ 2>/dev/null
-          cp -f *.ubi /home/runner/firmware/ 2>/dev/null
-      
-          echo "✅ 已复制固件："
-          ls -lh /home/runner/firmware/
-      
-          # 上传到 Artifact
-          echo "FIRMWARE_PATH=/home/runner/firmware" >> "$GITHUB_ENV"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Upload Artifact
+          cp -f $FIRMWARE_OUTPUT_DIR/*redmi_ax6* /home/runner/firmware/ 2>/dev/null
+
+      - name: Upload Firmware
         uses: actions/upload-artifact@v4
+        if: steps.compile.outputs.status == 'success'
         with:
-          name: "AX6-256M-Firmware-${{ env.BUILD_TIME }}"
-          path: "/home/runner/firmware/*"
+          name: AX6-256M-Firmware-${{ env.BUILD_TIME }}
+          path: /home/runner/firmware/*
           retention-days: 30
