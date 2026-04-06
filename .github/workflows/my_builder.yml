@@ -1,6 +1,5 @@
 name: Redmi AX6 (256M) Build 
 
-# 全局环境变量（兼容 Node.js 24 + 路径配置）
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPO_URL: https://github.com/juesure/openwrt/
@@ -33,60 +32,40 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          # 清理旧依赖，释放磁盘空间
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt autoremove -y && sudo apt clean
-          
-          # 安装基础编译依赖 + 终端/伪终端依赖
           sudo apt update -y && sudo apt full-upgrade -y && sudo apt install -y \
             build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git \
             libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget \
             libelf-dev libfuse-dev device-tree-compiler mtd-utils squashfs-tools dosfstools \
             parted kmod zip gh python3 python3-pip \
             ncurses-term libncursesw5-dev ttyd expect
-          
-          # 设置时区，创建工作目录
           sudo timedatectl set-timezone "$TZ"
           mkdir -p "$WORK_DIR" "$FIRMWARE_OUTPUT_DIR"
           chmod -R 777 "$WORK_DIR" "$FIRMWARE_OUTPUT_DIR"
-          
-          # 检查DIY脚本和配置文件
           if [ ! -f "$DIY_SCRIPT" ]; then
-              printf "❌ DIY脚本不存在：%s\n" "$DIY_SCRIPT"
-              exit 1
+              printf "❌ DIY脚本不存在：%s\n" "$DIY_SCRIPT"; exit 1
           fi
           chmod +x "$DIY_SCRIPT"
-          
           if [ ! -f "$CONFIG_FILE" ]; then
-              printf "❌ 配置文件不存在：%s\n" "$CONFIG_FILE"
-              exit 1
+              printf "❌ 配置文件不存在：%s\n" "$CONFIG_FILE"; exit 1
           fi
-          
-          # 输出磁盘空间信息（排查空间不足问题）
           df -h
           printf "✅ 环境初始化完成\n"
 
       - name: Clone Source
         run: |
           cd "$WORK_DIR" || { printf "❌ 进入工作目录失败：%s\n" "$WORK_DIR"; exit 1; }
-          
-          # 优化克隆重试逻辑，增加错误提示
           for i in {1..3}; do
               if git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt; then
-                  printf "✅ 源码克隆成功（第%d次尝试）\n" "$i"
-                  break
+                  printf "✅ 源码克隆成功（第%d次尝试）\n" "$i"; break
               fi
               printf "⚠️ 第%d次克隆失败，5秒后重试\n" "$i"
-              rm -rf openwrt
-              sleep 5
+              rm -rf openwrt; sleep 5
           done
-          
           if [ ! -d "$WORK_DIR/openwrt" ]; then
-              printf "❌ 源码克隆失败（3次重试均失败）\n"
-              exit 1
+              printf "❌ 源码克隆失败（3次重试均失败）\n"; exit 1
           fi
-          
-          # 删除无效软链接，避免路径冲突
           rm -f /home/runner/work/openwrt/openwrt/openwrt
           ln -sf "$WORK_DIR/openwrt" /home/runner/work/openwrt/openwrt/openwrt
           chmod -R 755 "$WORK_DIR/openwrt"
@@ -97,14 +76,9 @@ jobs:
           OPENWRT_SRC="$WORK_DIR/openwrt"
           cd "$OPENWRT_SRC" || { printf "❌ 进入源码目录失败：%s\n" "$OPENWRT_SRC"; exit 1; }
           printf "🔧 当前工作目录：%s\n" "$(pwd)"
-          
-          # 验证DIY脚本可执行性
           if [ ! -x "$DIY_SCRIPT" ]; then
-              printf "❌ 赋予DIY脚本权限失败：%s\n" "$DIY_SCRIPT"
-              exit 1
+              printf "❌ 赋予DIY脚本权限失败：%s\n" "$DIY_SCRIPT"; exit 1
           fi
-          
-          # 执行DIY脚本并捕获完整日志
           printf "🔧 执行DIY脚本：%s\n" "$DIY_SCRIPT"
           if ! "$DIY_SCRIPT"; then
               printf "❌ DIY脚本执行失败！完整日志：\n"
@@ -115,8 +89,6 @@ jobs:
               fi
               exit 1
           fi
-          
-          # 修复json文件image_size解析错误
           JSON_FILE=$(find "$OPENWRT_SRC" -name "json_add_image_info.py" 2>/dev/null | head -1)
           if [ -n "$JSON_FILE" ]; then
               sed -i 's/return int(image_size)/return int(image_size, 0)/' "$JSON_FILE"
@@ -124,8 +96,6 @@ jobs:
           else
               printf "⚠️ 未找到json_add_image_info.py，跳过修复\n"
           fi
-          
-          # 禁用fwupd和交互式配置选项
           {
               echo "CONFIG_PACKAGE_fwupd=n"
               echo "CONFIG_PACKAGE_fwupd-libs=n"
@@ -133,16 +103,13 @@ jobs:
               echo "CONFIG_ALL_NONSHARED=n"
               echo "CONFIG_AUTOREMOVE=n"
               echo "CONFIG_COLLECT_KERNEL_DEBUG=n"
-              echo "CONFIG_DISABLE_MENUCONFIG=y"  # 关键：禁用交互式menuconfig
+              echo "CONFIG_DISABLE_MENUCONFIG=y"
           } >> "$OPENWRT_SRC/.config"
-          
-          # 复制配置文件并生成非交互式defconfig
           cp "$CONFIG_FILE" "$OPENWRT_SRC/.config"
           echo "🔧 生成非交互式defconfig..."
           if ! make defconfig -e > defconfig.log 2>&1; then
               printf "❌ defconfig执行失败，日志：\n"
-              cat defconfig.log
-              exit 1
+              cat defconfig.log; exit 1
           fi
           printf "✅ Preprocess 步骤完成\n"
 
@@ -150,12 +117,28 @@ jobs:
         id: compile
         run: |
           cd "$WORK_DIR/openwrt" || exit 1
-          
-          # 核心修复：模拟终端环境，解决Error opening terminal问题
+
+          # ===================== 【修复 DTS 语法错误：ipq8074.dtsi 第178行】 =====================
+          DTS_FILE="$WORK_DIR/openwrt/target/linux/qualcommax/dts/ipq8074.dtsi"
+          echo "====================================="
+          echo "🔍 调试：检查 ipq8074.dtsi 第178行语法错误"
+          echo "文件：$DTS_FILE"
+          echo "原始 176~180 行："
+          sed -n '176,180p' "$DTS_FILE" 2>/dev/null || echo "文件不存在"
+
+          # 自动修复：补全分号、修复reg属性格式（你改256M flash最常犯的错）
+          sed -i '178s/[^\;]$/;/' "$DTS_FILE" 2>/dev/null
+          sed -i '178s/reg = <\(.*\)>/reg = <\1>;/' "$DTS_FILE" 2>/dev/null
+          sed -i '178s/flash@[0-9]* {/&/' "$DTS_FILE" 2>/dev/null
+
+          echo "修复后 176~180 行："
+          sed -n '176,180p' "$DTS_FILE" 2>/dev/null
+          echo "====================================="
+          # ====================================================================================
+
           export TERM=xterm
           export NCURSES_NO_UTF8_ACS=1
-          
-          # 修复设备树文件路径（兼容不同OpenWRT版本）
+
           echo "🔧 修复设备树文件路径问题..."
           DTS_SRC="$WORK_DIR/openwrt/target/linux/qualcommax/dts"
           DTS_DST1="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-qualcommax_ipq807x/dts"
@@ -166,40 +149,29 @@ jobs:
           echo "✅ 设备树文件已复制到："
           ls -lh "$DTS_DST1/" || printf "⚠️ %s 为空\n" "$DTS_DST1"
           ls -lh "$DTS_DST2/" || printf "⚠️ %s 为空\n" "$DTS_DST2"
-          
-          # 提前生成defconfig，确保无交互式配置
+
           echo "🔧 确认defconfig配置..."
           make defconfig -j1 V=s 2>&1 | tee defconfig_fix.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ defconfig生成失败，日志："
-            cat defconfig_fix.log
-            exit 1
+            echo "❌ defconfig生成失败，日志："; cat defconfig_fix.log; exit 1
           fi
-          
-          # 下载编译依赖
+
           echo "📥 下载编译依赖..."
           make download -j$(nproc) 2>&1 | tee download.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 下载依赖失败，日志最后50行："
-            tail -50 download.log
-            exit 1
+            echo "❌ 下载依赖失败，日志最后50行："; tail -50 download.log; exit 1
           fi
-          
-          # 编译工具链
+
           echo "🔨 编译工具链..."
           make tools/compile -j$(nproc) V=s 2>&1 | tee toolchain.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 工具链编译失败，日志最后100行："
-            tail -100 toolchain.log
-            exit 1
+            echo "❌ 工具链编译失败，日志最后100行："; tail -100 toolchain.log; exit 1
           fi
-          
-          # 编译固件（单线程+忽略非致命错误）
+
           echo "🔨 编译固件（单线程，非交互式）..."
           make -j1 V=s IGNORE_ERRORS=1 2>&1 | tee compile_single.log
           COMPILE_STATUS=${PIPESTATUS[0]}
-          
-          # 校验编译结果（扩大查找范围，兼容不同命名）
+
           FIRMWARE_FILES=$(find "$WORK_DIR/openwrt/bin" -name "*redmi_ax6*" -type f 2>/dev/null)
           if [ $COMPILE_STATUS -eq 0 ] && [ -n "$FIRMWARE_FILES" ]; then
             echo "✅ 固件编译成功"
@@ -219,23 +191,15 @@ jobs:
       - name: Generate Firmware
         if: steps.compile.outputs.status == 'success'
         run: |
-          # 检查输出目录是否存在
           if [ ! -d "$FIRMWARE_OUTPUT_DIR" ]; then
-              printf "❌ 固件输出目录不存在：%s\n" "$FIRMWARE_OUTPUT_DIR"
-              exit 1
+              printf "❌ 固件输出目录不存在：%s\n" "$FIRMWARE_OUTPUT_DIR"; exit 1
           fi
           cd "$FIRMWARE_OUTPUT_DIR" || exit 1
           BUILD_TIME="${{ env.BUILD_TIME }}"
-          
-          echo "📂 编译输出目录内容："
-          ls -lh
-          
-          # 复制固件到统一目录
+          echo "📂 编译输出目录内容："; ls -lh
           mkdir -p /home/runner/firmware
           cp -f *redmi_ax6*.bin /home/runner/firmware/ 2>/dev/null || true
           cp -f *redmi_ax6*.ubi /home/runner/firmware/ 2>/dev/null || true
-          
-          # 提取rootfs.ubi（增加有效性校验）
           SYSUPGRADE=$(ls *sysupgrade.bin 2>/dev/null | head -1)
           if [ -n "$SYSUPGRADE" ] && [ ! -f /home/runner/firmware/*rootfs.ubi ]; then
               echo "🔧 从sysupgrade.bin提取rootfs.ubi..."
@@ -246,8 +210,6 @@ jobs:
                   echo "⚠️ rootfs.ubi提取失败"
               fi
           fi
-          
-          # 发布到GitHub Release（单行写法避免YAML语法错误）
           RELEASE_TAG="AX6-256M-${BUILD_TIME}"
           RELEASE_NOTES="### Redmi AX6 256M 固件编译信息\n- 编译时间：${BUILD_TIME}\n- 源码分支：${REPO_BRANCH}\n- 平台：qualcommax/ipq807x"
           if ! gh release create "$RELEASE_TAG" --title "Redmi AX6 256M Firmware ${BUILD_TIME}" --notes "$RELEASE_NOTES" /home/runner/firmware/*; then
