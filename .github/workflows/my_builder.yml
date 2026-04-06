@@ -1,6 +1,5 @@
 name: Redmi AX6 256M Build
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REPO_URL: https://github.com/juesure/openwrt
   REPO_BRANCH: AX6_256M_FLASH_V1.1
   TZ: Asia/Shanghai
@@ -35,7 +34,10 @@ jobs:
       - name: Prepare config
         run: |
           cd lede
-          cp ../openwrt/config/my_config .config
+          # ✅ 正确路径：直接使用你仓库里的 config/my_config
+          cp ../openwrt/config/my_config.sh .config
+          
+          # ✅ 只追加，不修改原有配置
           cat >> .config << EOF
           CONFIG_PACKAGE_fwupd=n
           CONFIG_PACKAGE_fwupd-libs=n
@@ -46,12 +48,12 @@ jobs:
           EOF
           make defconfig
 
-      - name: Fix DTS error
+      - name: Fix DTS syntax error
         run: |
           FILE=lede/target/linux/qualcommax/dts/ipq8074.dtsi
-          sed -i "178,180c\			clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;\n			clock-names = \"core\", \"axi\";" $FILE
+          sed -i '178,180c\			clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;\n			clock-names = "core", "axi";' $FILE
 
-      - name: Compile
+      - name: Compile firmware
         id: compile
         run: |
           cd lede
@@ -59,15 +61,15 @@ jobs:
           make download -j$(nproc)
           make tools/compile -j$(nproc)
           make -j1 V=s IGNORE_ERRORS=1
-          F=\$(find bin/targets/qualcommax/ipq807x -name "*redmi_ax6*" | head -1)
-          if [ -n "\$F" ]; then
+          F=$(find bin/targets/qualcommax/ipq807x -name "*redmi_ax6*" | head -1)
+          if [ -n "$F" ]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
             mkdir -p ../firmware
-            cp \$F ../firmware/
+            cp $F ../firmware/
           fi
 
-      - name: Upload
+      - name: Upload artifact
         if: steps.compile.outputs.status == 'success'
         uses: actions/upload-artifact@v4
         with:
