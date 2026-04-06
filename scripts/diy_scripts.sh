@@ -206,7 +206,7 @@ cat > "$DTS_DIR/ipq8074.dtsi" << 'EOF'
 				     <GIC_SPI 191 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 192 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "rx0", "rx1", "tx0", "tx1";
-			clocks = <&gcc GCC_EDMA_CLK>,
+			clocks = <&gcc GCC_EDMA_CLK>;
 				 <&gcc GCC_EDMA_AXI_CLK>;
 			clock-names = "core", "axi";
 			resets = <&gcc GCC_EDMA_RESET>;
