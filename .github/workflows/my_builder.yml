@@ -118,78 +118,52 @@ jobs:
         run: |
           cd "$WORK_DIR/openwrt" || exit 1
       
-          # ===================== 【精准定位+强制修复 DTS 错误】 =====================
+          # ===================== 【终极干净修复：ipq8074.dtsi】 =====================
           DTS_FILE="$WORK_DIR/openwrt/target/linux/qualcommax/dts/ipq8074.dtsi"
           echo "====================================="
-          echo "🔍 打印 ipq8074.dtsi 170-185行："
-          if [ -f "$DTS_FILE" ]; then
-            cat -n "$DTS_FILE" | sed -n '170,185p'
-            LINE_178=$(sed -n '178p' "$DTS_FILE")
-            echo "📌 原178行：$LINE_178"
-            echo "📌 原178行第19-20字符：${LINE_178:18:2}"
-            
-            # 强制修复：备份原行 + 写入正确256M分区配置
-            echo "🔧 修复第178行..."
-            sed -i '178 s/^/\/\/BACKUP_178: /' "$DTS_FILE"  # 备份原行
-            sed -i '179i\        reg = <0x1000000 0xF000000>;' "$DTS_FILE"  # 插入正确行
-            
-            echo "✅ 修复后178-180行："
-            sed -n '178,180p' "$DTS_FILE"
-          else
-            echo "❌ 文件不存在：$DTS_FILE"; exit 1
-          fi
+          echo "🔧 彻底修复 DTS 语法错误（edma clocks）"
+      
+          # 强制覆盖 178-180 行，写成 100% 正确的格式
+          sed -i '178,180c\				clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;\n				clock-names = "core", "axi";' "$DTS_FILE"
+      
+          echo "✅ 修复后 178-182 行："
+          sed -n '178,182p' "$DTS_FILE"
           echo "====================================="
-          # =================================================================
+          # ========================================================================
       
           export TERM=xterm
           export NCURSES_NO_UTF8_ACS=1
       
-          echo "🔧 修复设备树文件路径问题..."
+          echo "🔧 复制设备树文件..."
           DTS_SRC="$WORK_DIR/openwrt/target/linux/qualcommax/dts"
           DTS_DST1="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-qualcommax_ipq807x/dts"
           DTS_DST2="$WORK_DIR/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-qualcommax_ipq807x/ipq807x-dts"
           mkdir -p "$DTS_DST1" "$DTS_DST2"
           cp -f "$DTS_SRC"/*.dts "$DTS_SRC"/*.dtsi "$DTS_DST1/" 2>/dev/null || true
           cp -f "$DTS_SRC"/*.dts "$DTS_SRC"/*.dtsi "$DTS_DST2/" 2>/dev/null || true
-          echo "✅ 设备树文件已复制到："
-          ls -lh "$DTS_DST1/" || printf "⚠️ %s 为空\n" "$DTS_DST1"
-          ls -lh "$DTS_DST2/" || printf "⚠️ %s 为空\n" "$DTS_DST2"
       
-          echo "🔧 确认defconfig配置..."
-          make defconfig -j1 V=s 2>&1 | tee defconfig_fix.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ defconfig生成失败，日志："; cat defconfig_fix.log; exit 1
-          fi
+          echo "🔧 生成配置..."
+          make defconfig -j1 V=s
       
-          echo "📥 下载编译依赖..."
-          make download -j$(nproc) 2>&1 | tee download.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 下载依赖失败，日志最后50行："; tail -50 download.log; exit 1
-          fi
+          echo "📥 下载依赖..."
+          make download -j$(nproc)
       
           echo "🔨 编译工具链..."
-          make tools/compile -j$(nproc) V=s 2>&1 | tee toolchain.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ 工具链编译失败，日志最后100行："; tail -100 toolchain.log; exit 1
-          fi
+          make tools/compile -j$(nproc) V=s
       
-          echo "🔨 编译固件（单线程，非交互式）..."
-          make -j1 V=s IGNORE_ERRORS=1 2>&1 | tee compile_single.log
-          COMPILE_STATUS=${PIPESTATUS[0]}
+          echo "🔨 开始编译固件..."
+          make -j1 V=s IGNORE_ERRORS=1 2>&1 | tee compile.log
+          COMPILE_STATUS=$?
       
           FIRMWARE_FILES=$(find "$WORK_DIR/openwrt/bin" -name "*redmi_ax6*" -type f 2>/dev/null)
           if [ $COMPILE_STATUS -eq 0 ] && [ -n "$FIRMWARE_FILES" ]; then
-            echo "✅ 固件编译成功"
+            echo "✅ 编译成功！"
             echo "status=success" >> "$GITHUB_OUTPUT"
-            echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> "$GITHUB_ENV"
-            echo "📂 生成的固件文件："
+            echo "BUILD_TIME=$(date +%Y%m%d_%H%H)" >> "$GITHUB_ENV"
             ls -lh $FIRMWARE_FILES
           else
-            echo "❌ 固件未生成"
-            echo "📂 编译输出目录结构："
-            find "$WORK_DIR/openwrt/bin" -type d 2>/dev/null | head -20
-            echo "编译日志最后200行："
-            tail -200 compile_single.log
+            echo "❌ 编译失败"
+            tail -200 compile.log
             exit 1
           fi
       - name: Generate Firmware
