@@ -37,13 +37,13 @@ jobs:
           cd lede
           cp ../openwrt/config/my_config .config
           cat >> .config << EOF
-CONFIG_PACKAGE_fwupd=n
-CONFIG_PACKAGE_fwupd-libs=n
-CONFIG_FWUPD_PLUGIN_FLASHROM=n
-CONFIG_TARGET_qualcommax=y
-CONFIG_TARGET_qualcommax_ipq807x=y
-CONFIG_TARGET_qualcommax_ipq807x_DEVICE_redmi_ax6=y
-EOF
+          CONFIG_PACKAGE_fwupd=n
+          CONFIG_PACKAGE_fwupd-libs=n
+          CONFIG_FWUPD_PLUGIN_FLASHROM=n
+          CONFIG_TARGET_qualcommax=y
+          CONFIG_TARGET_qualcommax_ipq807x=y
+          CONFIG_TARGET_qualcommax_ipq807x_DEVICE_redmi_ax6=y
+          EOF
           make defconfig
 
       - name: Fix DTS error
