@@ -169,39 +169,28 @@ jobs:
       - name: Generate Firmware
         if: steps.compile.outputs.status == 'success'
         run: |
-          if [ ! -d "$FIRMWARE_OUTPUT_DIR" ]; then
-              printf "❌ 固件输出目录不存在：%s\n" "$FIRMWARE_OUTPUT_DIR"; exit 1
-          fi
           cd "$FIRMWARE_OUTPUT_DIR" || exit 1
-          BUILD_TIME="${{ env.BUILD_TIME }}"
-          echo "📂 编译输出目录内容："; ls -lh
+          echo "📂 编译输出目录：$(pwd)"
+          ls -lh
+      
+          # 创建固件目录
           mkdir -p /home/runner/firmware
-          cp -f *redmi_ax6*.bin /home/runner/firmware/ 2>/dev/null || true
-          cp -f *redmi_ax6*.ubi /home/runner/firmware/ 2>/dev/null || true
-          SYSUPGRADE=$(ls *sysupgrade.bin 2>/dev/null | head -1)
-          if [ -n "$SYSUPGRADE" ] && [ ! -f /home/runner/firmware/*rootfs.ubi ]; then
-              echo "🔧 从sysupgrade.bin提取rootfs.ubi..."
-              dd if="$SYSUPGRADE" of=/home/runner/firmware/redmi_ax6_rootfs_${BUILD_TIME}.ubi bs=1M skip=4
-              if [ -f /home/runner/firmware/redmi_ax6_rootfs_${BUILD_TIME}.ubi ]; then
-                  echo "✅ 已提取rootfs.ubi：$(ls -lh /home/runner/firmware/*rootfs.ubi | awk '{print $9, $5}')"
-              else
-                  echo "⚠️ rootfs.ubi提取失败"
-              fi
-          fi
-          RELEASE_TAG="AX6-256M-${BUILD_TIME}"
-          RELEASE_NOTES="### Redmi AX6 256M 固件编译信息\n- 编译时间：${BUILD_TIME}\n- 源码分支：${REPO_BRANCH}\n- 平台：qualcommax/ipq807x"
-          if ! gh release create "$RELEASE_TAG" --title "Redmi AX6 256M Firmware ${BUILD_TIME}" --notes "$RELEASE_NOTES" /home/runner/firmware/*; then
-              printf "⚠️ Release已存在（%s），跳过发布\n" "$RELEASE_TAG"
-          else
-              printf "✅ 固件发布成功：https://github.com/%s/releases/tag/%s\n" "${{ github.repository }}" "$RELEASE_TAG"
-          fi
+      
+          # 复制所有固件（sysupgrade / factory / ubi 全都要）
+          cp -f *.bin /home/runner/firmware/ 2>/dev/null
+          cp -f *.ubi /home/runner/firmware/ 2>/dev/null
+      
+          echo "✅ 已复制固件："
+          ls -lh /home/runner/firmware/
+      
+          # 上传到 Artifact
+          echo "FIRMWARE_PATH=/home/runner/firmware" >> "$GITHUB_ENV"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
-        if: steps.compile.outputs.status == 'success'
         with:
           name: "AX6-256M-Firmware-${{ env.BUILD_TIME }}"
-          path: /home/runner/firmware/*
+          path: "/home/runner/firmware/*"
           retention-days: 30
