@@ -36,29 +36,27 @@ jobs:
           cd lede
           cp ../openwrt/config/my_config.sh .config
           cat >> .config << EOF
+          CONFIG_TARGET_qualcommax=y
+          CONFIG_TARGET_qualcommax_ipq807x=y
+          CONFIG_TARGET_DEVICE_redmi_ax6=y
           CONFIG_TARGET_ALL_PROFILES=n
-          CONFIG_TARGET_MULTI_PROFILE=n
-          CONFIG_TARGET_DEVICE_qualcommax_ipq807x_DEVICE_redmi_ax6=y
           CONFIG_PACKAGE_fwupd=n
           EOF
           make defconfig
 
       # ==========================================
-      # 【🧨 终极绝杀】
-      # 1. 删除报错的坏设备文件
+      # 【✅ 终极正确修复】
+      # 1. 从image Makefile删除坏设备，不编译它
       # 2. 修复DTS语法
       # ==========================================
-      - name: Fix & Clean broken DTS
+      - name: Fix compilation
         run: |
           cd lede
-          # 直接删除报错的ap8220设备树
-          rm -f target/linux/qualcommax/dts/ipq8071-ap8220.dts
-          rm -f target/linux/qualcommax/dts/ipq8074-ess.dtsi
-          
-          # 修复AX6需要的edma时钟
-          FILE="target/linux/qualcommax/dts/ipq8074.dtsi"
-          sed -i '/clocks = <&gcc GCC_EDMA_CLK>/c\				clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;' "$FILE"
-          sed -i '/GCC_EDMA_AXI_CLK>;/d' "$FILE"
+          # 1. 从编译列表里删除 ipq8071-ap8220（永不编译）
+          sed -i '/ipq8071-ap8220/d' target/linux/qualcommax/image/Makefile
+          # 2. 修复edma时钟语法
+          FILE=target/linux/qualcommax/dts/ipq8074.dtsi
+          sed -i '178,180c\				clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;\n				clock-names = "core", "axi";' $FILE
 
       - name: Compile firmware
         id: compile
@@ -75,6 +73,7 @@ jobs:
             echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
             mkdir -p ../firmware
             cp \$FIRMWARE ../firmware/
+            echo "✅ 固件已生成："
             ls ../firmware/
           fi
 
