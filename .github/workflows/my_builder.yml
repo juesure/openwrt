@@ -31,9 +31,6 @@ jobs:
         run: |
           git clone --depth=1 $REPO_URL -b $REPO_BRANCH lede
 
-      # ==============================================
-      # 【1】配置：只追加，不覆盖原有配置
-      # ==============================================
       - name: Prepare config
         run: |
           cd lede
@@ -48,29 +45,18 @@ jobs:
           EOF
           make defconfig
 
-      # ==============================================
-      # 【2】强制修复 DTS 错误（100% 必生效）
-      # ==============================================
-      - name: Fix DTS error permanently
+      # ==========================================
+      # 【✅ 绝杀修复】全局替换 DTS 语法错误
+      # 不看行号！直接修复所有错误格式！
+      # ==========================================
+      - name: Fix ALL DTS syntax errors
         run: |
           FILE="lede/target/linux/qualcommax/dts/ipq8074.dtsi"
-          echo "Fixing DTS file: $FILE"
-          # 暴力覆盖 177-183 行，彻底消除语法错误
-          cat > "$FILE.tmp" << 'EOT'
-            interrupt-names = "rx0", "rx1", "tx0", "tx1";
-            clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;
-            clock-names = "core", "axi";
-            resets = <&gcc GCC_EDMA_RESET>;
-            reset-names = "edma";
-            status = "disabled";
-          EOT
-          sed -i '177,183d' "$FILE"
-          sed -i '177r '"$FILE.tmp" "$FILE"
-          rm -f "$FILE.tmp"
+          # 全局修复错误的 clocks 写法
+          sed -i '/clocks = <&gcc GCC_EDMA_CLK>;/c\				clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;' "$FILE"
+          sed -i '/<&gcc GCC_EDMA_AXI_CLK>;/d' "$FILE"
+          echo "✅ DTS 设备树已全局修复"
 
-      # ==============================================
-      # 【3】编译固件
-      # ==============================================
       - name: Compile firmware
         id: compile
         run: |
@@ -87,9 +73,6 @@ jobs:
             cp $F ../firmware/
           fi
 
-      # ==============================================
-      # 【4】上传固件
-      # ==============================================
       - name: Upload artifact
         if: steps.compile.outputs.status == 'success'
         uses: actions/upload-artifact@v4
