@@ -34,26 +34,31 @@ jobs:
       - name: Prepare config
         run: |
           cd lede
-          # 加载你的配置
           cp ../openwrt/config/my_config.sh .config
-          
-          # ==========================================
-          # 【核心绝杀】只编译 REDMI AX6，忽略所有其他设备！
-          # ==========================================
           cat >> .config << EOF
           CONFIG_TARGET_ALL_PROFILES=n
           CONFIG_TARGET_MULTI_PROFILE=n
           CONFIG_TARGET_DEVICE_qualcommax_ipq807x_DEVICE_redmi_ax6=y
           CONFIG_PACKAGE_fwupd=n
           EOF
-
           make defconfig
 
-      - name: Fix DTS edma clock
+      # ==========================================
+      # 【🧨 终极绝杀】
+      # 1. 删除报错的坏设备文件
+      # 2. 修复DTS语法
+      # ==========================================
+      - name: Fix & Clean broken DTS
         run: |
-          FILE="lede/target/linux/qualcommax/dts/ipq8074.dtsi"
-          sed -i '/clocks = <&gcc GCC_EDMA_CLK>;/c\				clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;' "$FILE"
-          sed -i '/<&gcc GCC_EDMA_AXI_CLK>/d' "$FILE"
+          cd lede
+          # 直接删除报错的ap8220设备树
+          rm -f target/linux/qualcommax/dts/ipq8071-ap8220.dts
+          rm -f target/linux/qualcommax/dts/ipq8074-ess.dtsi
+          
+          # 修复AX6需要的edma时钟
+          FILE="target/linux/qualcommax/dts/ipq8074.dtsi"
+          sed -i '/clocks = <&gcc GCC_EDMA_CLK>/c\				clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;' "$FILE"
+          sed -i '/GCC_EDMA_AXI_CLK>;/d' "$FILE"
 
       - name: Compile firmware
         id: compile
@@ -64,7 +69,6 @@ jobs:
           make tools/compile -j$(nproc)
           make -j1 V=s IGNORE_ERRORS=1
           
-          # 查找固件
           FIRMWARE=\$(find bin/targets/qualcommax/ipq807x -name "*redmi_ax6*" | head -1)
           if [ -n "\$FIRMWARE" ]; then
             echo "status=success" >> $GITHUB_OUTPUT
