@@ -34,28 +34,26 @@ jobs:
       - name: Prepare config
         run: |
           cd lede
+          # 加载你的配置
           cp ../openwrt/config/my_config.sh .config
+          
+          # ==========================================
+          # 【核心绝杀】只编译 REDMI AX6，忽略所有其他设备！
+          # ==========================================
           cat >> .config << EOF
+          CONFIG_TARGET_ALL_PROFILES=n
+          CONFIG_TARGET_MULTI_PROFILE=n
+          CONFIG_TARGET_DEVICE_qualcommax_ipq807x_DEVICE_redmi_ax6=y
           CONFIG_PACKAGE_fwupd=n
-          CONFIG_PACKAGE_fwupd-libs=n
-          CONFIG_FWUPD_PLUGIN_FLASHROM=n
-          CONFIG_TARGET_qualcommax=y
-          CONFIG_TARGET_qualcommax_ipq807x=y
-          CONFIG_TARGET_qualcommax_ipq807x_DEVICE_redmi_ax6=y
           EOF
+
           make defconfig
 
-      # ==========================================
-      # 【✅ 绝杀修复】全局替换 DTS 语法错误
-      # 不看行号！直接修复所有错误格式！
-      # ==========================================
-      - name: Fix ALL DTS syntax errors
+      - name: Fix DTS edma clock
         run: |
           FILE="lede/target/linux/qualcommax/dts/ipq8074.dtsi"
-          # 全局修复错误的 clocks 写法
           sed -i '/clocks = <&gcc GCC_EDMA_CLK>;/c\				clocks = <&gcc GCC_EDMA_CLK>, <&gcc GCC_EDMA_AXI_CLK>;' "$FILE"
-          sed -i '/<&gcc GCC_EDMA_AXI_CLK>;/d' "$FILE"
-          echo "✅ DTS 设备树已全局修复"
+          sed -i '/<&gcc GCC_EDMA_AXI_CLK>/d' "$FILE"
 
       - name: Compile firmware
         id: compile
@@ -65,12 +63,15 @@ jobs:
           make download -j$(nproc)
           make tools/compile -j$(nproc)
           make -j1 V=s IGNORE_ERRORS=1
-          F=$(find bin/targets/qualcommax/ipq807x -name "*redmi_ax6*" | head -1)
-          if [ -n "$F" ]; then
+          
+          # 查找固件
+          FIRMWARE=\$(find bin/targets/qualcommax/ipq807x -name "*redmi_ax6*" | head -1)
+          if [ -n "\$FIRMWARE" ]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "BUILD_TIME=$(date +%Y%m%d_%H%M)" >> $GITHUB_ENV
             mkdir -p ../firmware
-            cp $F ../firmware/
+            cp \$FIRMWARE ../firmware/
+            ls ../firmware/
           fi
 
       - name: Upload artifact
