@@ -63,29 +63,43 @@ jobs:
       run: |
         cd openwrt
         make -j$(nproc) || make -j1 V=s
-
     - name: Organize files
       run: |
         cd openwrt/bin/targets/
         mkdir -p ../../../artifact/
         # 查找所有 .bin 和 .ubi 文件，复制到 artifact 目录
         find ./ -type f \( -name "*.bin" -o -name "*.ubi" \) -exec cp -rf {} ../../../artifact/ \;
-
+    - name: Process UBI files
+      run: |
+        cd artifact/
+        # 复制 UBI 文件（如果存在）
+        cp *ubi . 2>/dev/null || true
+        
+        # 如果仍没有 rootfs.ubi，尝试从 sysupgrade.bin 提取
+        if ! ls *rootfs.ubi 1>/dev/null 2>&1; then
+            SYSUPGRADE=$(ls *sysupgrade.bin | head -1)
+            if [ -n "$SYSUPGRADE" ]; then
+                dd if="$SYSUPGRADE" of=redmi_ax6_rootfs.ubi bs=1M skip=4
+                echo "✅ 已从 sysupgrade.bin 提取 rootfs.ubi"
+            fi
+        fi
+        # 确保所有文件在当前目录（artifact）下，供后续上传
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: OpenWrt_firmware
         path: artifact/
 
-    - name: Create GitHub Release
-      id: create_release
+    - name: Create or Update Release
       uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/')  # 仅在推送 tag 时创建 Release
       with:
-        tag_name: ${{ github.ref_name }}
-        name: Release ${{ github.ref_name }}
+        tag_name: latest
+        name: "Latest Build"
+        body: "最新自动构建固件"
         draft: false
-        prerelease: false
-        files: artifact/*          # 将 artifact 目录下的所有固件附加到 Release
+        prerelease: true
+        files: artifact/*
+        allow_updates: true       # 允许更新已有 Release 的附件
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
