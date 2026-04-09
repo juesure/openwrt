@@ -68,10 +68,24 @@ jobs:
       run: |
         cd openwrt/bin/targets/
         mkdir -p ../../../artifact/
-        cp -rf $(find ./ -type f -name "*-squashfs-*" -o -name "*-ext4-*" -o -name "*-factory-*" -o -name "*-initramfs-*") ../../../artifact/
+        # 查找所有 .bin 和 .ubi 文件，复制到 artifact 目录
+        find ./ -type f \( -name "*.bin" -o -name "*.ubi" \) -exec cp -rf {} ../../../artifact/ \;
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: OpenWrt_firmware
         path: artifact/
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')  # 仅在推送 tag 时创建 Release
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        files: artifact/*          # 将 artifact 目录下的所有固件附加到 Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
