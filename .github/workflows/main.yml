@@ -42,17 +42,31 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: Load custom configuration
-      run: |
-        [ -e .config ] && cp .config openwrt/.config
-        cd openwrt
-        make defconfig
-
     - name: SSH connection to Actions
       uses: P3TERX/ssh2actions@v1.0.0
       if: github.event.inputs.ssh == 'true'
       with:
         args: ${{ secrets.SSH2ACTIONS }}
+
+    - name: Load configuration and verify AX6
+      run: |
+        cd openwrt
+        # 如果仓库根目录有 .config 文件作为基础模板，可以取消下面的注释
+        # [ -e ../.config ] && cp ../.config .config
+        # 根据当前 .config（可能已被 SSH 中修改）生成完整配置
+        make defconfig
+        # 验证是否为红米 AX6
+        if grep -q "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_redmi_ax6=y" .config; then
+            echo "✅ 配置确认：目标设备为红米 AX6"
+        else
+            echo "❌ 错误：当前配置不是 AX6，请检查 .config"
+            grep "CONFIG_TARGET.*DEVICE" .config || true
+            exit 1
+        fi
+    - name: Download package
+      run: |
+        cd openwrt
+        make download -j8
 
     - name: Download package
       run: |
