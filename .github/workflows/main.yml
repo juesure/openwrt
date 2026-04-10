@@ -63,10 +63,6 @@ jobs:
             grep "CONFIG_TARGET.*DEVICE" .config || true
             exit 1
         fi
-    - name: Download package
-      run: |
-        cd openwrt
-        make download -j8
 
     - name: Download package
       run: |
